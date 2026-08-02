@@ -123,6 +123,13 @@ function EditorPageInner() {
             />
             <button
               className="ctrl-btn"
+              id="theme-panel-btn"
+              title="Палитра и оттенки темы"
+            >
+              🎨 Тема
+            </button>
+            <button
+              className="ctrl-btn"
               id="color-reset-btn"
               title="Сбросить цвет"
               style={{ padding: "0 6px", fontSize: "11px" }}
@@ -269,6 +276,14 @@ function EditorPageInner() {
               <option value="persona">Характер</option>
               <option value="enemy">Враги</option>
               <option value="goal">Цель</option>
+              <option value="hourglass">Песочные часы</option>
+              <option value="moon">Луна</option>
+              <option value="globe">Мир / глобус</option>
+              <option value="tree">Древо</option>
+              <option value="mask">Маска</option>
+              <option value="quill">Перо</option>
+              <option value="gold">Золото</option>
+              <option value="erythrogen">Эритроген</option>
             </select>
           </div>
           <div className="modal-btns">
@@ -408,6 +423,113 @@ function EditorPageInner() {
           </div>
           <div className="modal-btns">
             <button id="font-modal-close">Закрыть</button>
+          </div>
+        </div>
+      </div>
+
+      {/* ======== МОДАЛКА: ТЕМА / ЦВЕТ ======== */}
+      <div
+        id="theme-modal"
+        className="modal-overlay"
+        style={{ display: "none" }}
+      >
+        <div className="modal-box theme-modal-box">
+          <div className="modal-title">Тема анкеты</div>
+
+          <div className="theme-preview" id="theme-preview">
+            <span className="theme-preview-label" id="theme-preview-label">
+              Досье
+            </span>
+          </div>
+
+          <div className="theme-row">
+            <label htmlFor="theme-hue-slider">Оттенок</label>
+            <input
+              type="range"
+              id="theme-hue-slider"
+              min="0"
+              max="360"
+              step="1"
+              defaultValue="30"
+            />
+            <span className="theme-val" id="theme-hue-val">
+              30°
+            </span>
+          </div>
+
+          <div className="theme-row">
+            <label htmlFor="theme-sat-slider">Насыщенность</label>
+            <input
+              type="range"
+              id="theme-sat-slider"
+              min="0"
+              max="100"
+              step="1"
+              defaultValue="45"
+            />
+            <span className="theme-val" id="theme-sat-val">
+              45%
+            </span>
+          </div>
+
+          <div className="theme-row">
+            <label htmlFor="theme-light-slider">Светлота</label>
+            <input
+              type="range"
+              id="theme-light-slider"
+              min="0"
+              max="100"
+              step="1"
+              defaultValue="18"
+            />
+            <span className="theme-val" id="theme-light-val">
+              18%
+            </span>
+          </div>
+
+          <div className="theme-row">
+            <label htmlFor="theme-opacity-slider">Плотность</label>
+            <input
+              type="range"
+              id="theme-opacity-slider"
+              min="30"
+              max="100"
+              step="1"
+              defaultValue="94"
+            />
+            <span className="theme-val" id="theme-opacity-val">
+              94%
+            </span>
+          </div>
+
+          <div className="theme-row">
+            <label>Точный цвет</label>
+            <input
+              type="color"
+              id="theme-color-input"
+              className="theme-color-input"
+              defaultValue="#2a1f14"
+            />
+            <input
+              type="text"
+              id="theme-hex-input"
+              className="theme-hex-input"
+              maxLength={7}
+              spellCheck={false}
+              placeholder="#2A1F14"
+            />
+            <label className="theme-toggle" htmlFor="theme-gradient-toggle">
+              <input type="checkbox" id="theme-gradient-toggle" defaultChecked />
+              Градиент
+            </label>
+          </div>
+
+          <div className="theme-presets-title">Готовые оттенки</div>
+          <div className="theme-presets" id="theme-presets" />
+
+          <div className="modal-btns">
+            <button id="theme-reset">Сбросить</button>
+            <button id="theme-apply">Готово</button>
           </div>
         </div>
       </div>

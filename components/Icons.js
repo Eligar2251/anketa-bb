@@ -162,5 +162,73 @@ goal: `<svg class="ficon" viewBox="0 0 36 36">
   <path d="M22 22l2-8-8 2Z" fill="none" stroke="currentColor"
         stroke-width="1" opacity=".35"/>
 </svg>`,
+
+// ══════════════════════════════════════════════
+//  ДОБАВЛЕНО: иконки, которые были в списке выбора,
+//  но отсутствовали здесь — поля молча получали «свиток».
+// ══════════════════════════════════════════════
+
+// 👤 Внешность — Силуэт с зеркалом
+appearance: `<svg class="ficon" viewBox="0 0 36 36">
+  <circle cx="18" cy="12" r="6" fill="none" stroke="currentColor" stroke-width="1.8"/>
+  <path d="M7 31c0-6.5 5-10 11-10s11 3.5 11 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M14 11.5a4 4 0 0 1 8 0" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".45"/>
+</svg>`,
+
+// 🏅 Титул — Лента с медалью
+title: `<svg class="ficon" viewBox="0 0 36 36">
+  <circle cx="18" cy="22" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/>
+  <circle cx="18" cy="22" r="3.5" fill="currentColor" opacity=".4"/>
+  <path d="M12 15L8 4h8l3 7M24 15l4-11h-8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+</svg>`,
+
+// 🚩 Фракция — Знамя
+faction: `<svg class="ficon" viewBox="0 0 36 36">
+  <path d="M9 4v28" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <path d="M9 6h18l-4 6l4 6H9Z" fill="currentColor" opacity=".35" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+  <circle cx="9" cy="3.5" r="1.8" fill="currentColor"/>
+</svg>`,
+
+// 🐺 Спутник / питомец — Лапа
+companion: `<svg class="ficon" viewBox="0 0 36 36">
+  <ellipse cx="18" cy="24" rx="7" ry="5.5" fill="currentColor" opacity=".45" stroke="currentColor" stroke-width="1.5"/>
+  <ellipse cx="10" cy="15" rx="3" ry="4" fill="currentColor" opacity=".6"/>
+  <ellipse cx="26" cy="15" rx="3" ry="4" fill="currentColor" opacity=".6"/>
+  <ellipse cx="15" cy="9" rx="2.7" ry="3.6" fill="currentColor" opacity=".6"/>
+  <ellipse cx="22" cy="9" rx="2.7" ry="3.6" fill="currentColor" opacity=".6"/>
+</svg>`,
+
+// 🩸 Родословная — Древо крови
+bloodline: `<svg class="ficon" viewBox="0 0 36 36">
+  <circle cx="18" cy="6" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+  <circle cx="9" cy="19" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+  <circle cx="27" cy="19" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+  <circle cx="18" cy="31" r="3.2" fill="currentColor" opacity=".4" stroke="currentColor" stroke-width="1.6"/>
+  <path d="M18 9.2v3.3M18 12.5L9.8 16.3M18 12.5l8.2 3.8M10.5 21.8l6 6.4M25.5 21.8l-6 6.4"
+        stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity=".65"/>
+</svg>`,
+
+// 🔨 Профессия / ремесло — Молот и наковальня
+profession: `<svg class="ficon" viewBox="0 0 36 36">
+  <path d="M5 26h26v4H5z" fill="currentColor" opacity=".35" stroke="currentColor" stroke-width="1.4"/>
+  <path d="M8 26c0-4 4-6 10-6h12l-4-4h-6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+  <path d="M13 4l9 9-3 3-9-9Z" fill="currentColor" opacity=".45" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+</svg>`,
+
+// 🔗 Связи — Звенья цепи
+relations: `<svg class="ficon" viewBox="0 0 36 36">
+  <rect x="4" y="14" width="16" height="8" rx="4" fill="none" stroke="currentColor" stroke-width="1.8"
+        transform="rotate(-30 12 18)"/>
+  <rect x="16" y="14" width="16" height="8" rx="4" fill="none" stroke="currentColor" stroke-width="1.8"
+        transform="rotate(-30 24 18)"/>
+</svg>`,
+
+// 🎤 Голос — Звуковые волны
+voice: `<svg class="ficon" viewBox="0 0 36 36">
+  <rect x="14" y="4" width="8" height="15" rx="4" fill="currentColor" opacity=".35"
+        stroke="currentColor" stroke-width="1.6"/>
+  <path d="M9 16a9 9 0 0 0 18 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+  <path d="M18 25v6M14 31h8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+</svg>`,
 };
 

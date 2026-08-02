@@ -10,6 +10,7 @@
   --ery-font-size: 64px;
   --rank-name-font-size: 32px;
   --rank-range-font-size: 26px;
+  --badge-font-size: 24px;
 }
 
 /* ============================================================
@@ -177,7 +178,6 @@ body {
   background-color: #dfc87e;
   padding: 48px 58px 80px;
   overflow: hidden;
-  will-change: transform;
 }
 
 #sheet-bg-layer {
@@ -197,7 +197,6 @@ body {
   transform-origin: 0 0;
   user-select: none;
   cursor: grab;
-  will-change: transform;
 }
 
 #sheet-bg-layer img.grabbing {
@@ -453,7 +452,6 @@ body {
   user-select: none;
   cursor: grab;
   display: block;
-  will-change: transform;
 }
 
 #portrait-img.grabbing {
@@ -1375,7 +1373,7 @@ body {
 
 .role-badge-text {
   font-family: 'Uncial Antiqua', 'Cormorant Garamond', serif;
-  font-size: 24px;
+  font-size: var(--badge-font-size);
   color: #5a3a0a;
   letter-spacing: 3px;
   text-transform: uppercase;
@@ -1388,7 +1386,7 @@ body {
 .role-badge-edit-input {
   display: none;
   font-family: 'Uncial Antiqua', 'Cormorant Garamond', serif;
-  font-size: 24px;
+  font-size: var(--badge-font-size);
   color: #5a3a0a;
   letter-spacing: 3px;
   text-transform: uppercase;
@@ -1402,10 +1400,21 @@ body {
   line-height: 1;
 }
 
+.role-badge-inner {
+  cursor: text;
+}
+
 .role-badge-inner:hover .role-badge-text::after {
   content: " ✎";
   font-size: 14px;
   opacity: 0.4;
+}
+
+/* Подсветка зоны портрета при перетаскивании файла */
+.portrait-area.drop-hover {
+  outline: 3px dashed rgba(196, 144, 80, 0.9);
+  outline-offset: -6px;
+  background: rgba(196, 144, 80, 0.12);
 }
 
 /* ============================================================
@@ -1626,39 +1635,136 @@ body {
 .role-neutral .role-badge-text { color: #4a4a3a; }
 
 /* ============================================================
-   КАСТОМНАЯ ТЕМА
+   КАСТОМНАЯ ТЕМА — полный охват элементов листа
    ============================================================ */
-.custom-theme #sheet-parchment { background: var(--theme-parchment-bg) !important; }
+.custom-theme { background-color: var(--theme-sheet-bg) !important; }
+
+.custom-theme #sheet-parchment {
+  background: var(--theme-parchment-bg) !important;
+}
+
 .custom-theme .sheet-border { border-color: var(--theme-border-color) !important; }
 .custom-theme .sheet-border::before { border-color: var(--theme-border-inner) !important; }
+
+/* текст */
 .custom-theme .header-name-input { color: var(--theme-name-color) !important; }
 .custom-theme .header-name-input::placeholder { color: var(--theme-name-placeholder) !important; }
 .custom-theme .field-label { color: var(--theme-label-color) !important; }
-.custom-theme .field-input, .custom-theme .history-textarea, .custom-theme .custom-field-textarea { color: var(--theme-input-color) !important; }
-.custom-theme .field-input::placeholder, .custom-theme .history-textarea::placeholder, .custom-theme .custom-field-textarea::placeholder { color: var(--theme-input-placeholder) !important; }
-.custom-theme .field-input, .custom-theme .custom-field-textarea { border-bottom-color: var(--theme-input-border) !important; }
-.custom-theme .field-row, .custom-theme .custom-field-row { border-bottom-color: var(--theme-row-border) !important; }
-.custom-theme .ficon { color: var(--theme-icon-color) !important; }
+.custom-theme .field-input,
+.custom-theme .history-textarea,
+.custom-theme .custom-field-textarea { color: var(--theme-input-color) !important; }
+.custom-theme .field-input::placeholder,
+.custom-theme .history-textarea::placeholder,
+.custom-theme .custom-field-textarea::placeholder { color: var(--theme-input-placeholder) !important; }
+.custom-theme .field-input,
+.custom-theme .custom-field-textarea { border-bottom-color: var(--theme-input-border) !important; }
+.custom-theme .field-row,
+.custom-theme .custom-field-row { border-bottom-color: var(--theme-row-border) !important; }
+
+/* иконки */
+.custom-theme .ficon { color: var(--theme-icon-color) !important; fill: none !important; }
+
+/* эритрогены */
+.custom-theme .erythrogen-block { border-top-color: var(--theme-row-border) !important; }
 .custom-theme .erythrogen-title { color: var(--theme-ery-title) !important; }
 .custom-theme .ery-number-input { color: var(--theme-ery-number) !important; }
 .custom-theme .rank-name { color: var(--theme-rank-name) !important; }
 .custom-theme .rank-range { color: var(--theme-rank-range) !important; }
+.custom-theme .rank-dot { color: var(--theme-rank-range) !important; }
+.custom-theme .ery-hint-toggle {
+  color: var(--theme-label-color) !important;
+  border-color: var(--theme-input-border) !important;
+  background: var(--theme-rank-bg) !important;
+}
+
+/* свиток шапки */
 .custom-theme .scroll-svg path[fill="#d4a96a"] { fill: var(--theme-scroll-fill1) !important; }
 .custom-theme .scroll-svg path[fill="#e8c98a"] { fill: var(--theme-scroll-fill2) !important; }
+.custom-theme .scroll-svg path[fill="#c49050"] { fill: var(--theme-scroll-fill3) !important; }
+.custom-theme .scroll-svg path[fill="#d4a050"] { fill: var(--theme-scroll-fill4) !important; }
+.custom-theme .scroll-svg path[stroke="#7a4a1a"],
+.custom-theme .scroll-svg line[stroke="#9a6425"] { stroke: var(--theme-scroll-stroke) !important; }
+.custom-theme .scroll-svg path[stroke="#9a6425"] { stroke: var(--theme-scroll-stroke2) !important; }
+
+/* центральный орнамент dual-режима */
+.custom-theme #scroll-center-ornament circle[fill="#d4a96a"] { fill: var(--theme-scroll-fill1) !important; }
+.custom-theme #scroll-center-ornament circle[fill="#c49050"] { fill: var(--theme-scroll-fill3) !important; }
+.custom-theme #scroll-center-ornament circle[fill="#7a4a1a"],
+.custom-theme #scroll-center-ornament path[fill="#9a6425"] { fill: var(--theme-divider-dot) !important; }
+.custom-theme #scroll-center-ornament line,
+.custom-theme #scroll-center-ornament circle[stroke] { stroke: var(--theme-scroll-stroke) !important; }
+
+/* портрет */
+.custom-theme .portrait-area { background: var(--theme-portrait-bg) !important; }
+.custom-theme .portrait-placeholder span { color: var(--theme-label-color) !important; }
+.custom-theme .portrait-placeholder svg circle,
+.custom-theme .portrait-placeholder svg path { fill: var(--theme-placeholder-fill) !important; }
 .custom-theme .frame-line { background: var(--theme-frame-line) !important; }
+.custom-theme .frame-corner path[stroke] { stroke: var(--theme-frame-line) !important; }
+.custom-theme .frame-corner path[fill="#c49050"] { fill: var(--theme-divider-fill) !important; }
+.custom-theme .frame-corner circle[stroke] { stroke: var(--theme-scroll-stroke2) !important; }
+.custom-theme .frame-corner circle[fill="#9a6425"] { fill: var(--theme-divider-dot) !important; }
+.custom-theme .portrait-resize-x::after,
+.custom-theme .portrait-resize-y::after { background: var(--theme-border-color) !important; }
+
+/* разделители */
 .custom-theme .section-divider line { stroke: var(--theme-divider-stroke) !important; }
-.custom-theme .history-textarea { background-image: repeating-linear-gradient(to bottom, transparent 0px, transparent 53px, var(--theme-history-line) 53px, var(--theme-history-line) 54px) !important; }
-.custom-theme .role-badge-inner { background: linear-gradient(135deg, var(--theme-input-border), transparent) !important; border-color: var(--theme-border-color) !important; }
-.custom-theme .role-badge-inner::before, .custom-theme .role-badge-inner::after { background: var(--theme-border-color) !important; border-color: var(--theme-frame-line) !important; }
+.custom-theme .section-divider path { fill: var(--theme-divider-fill) !important; stroke: var(--theme-divider-stroke) !important; }
+.custom-theme .section-divider circle { fill: var(--theme-divider-dot) !important; }
+
+/* история */
+.custom-theme .history-header text { fill: var(--theme-title-text) !important; }
+.custom-theme .history-header line { stroke: var(--theme-divider-stroke) !important; }
+.custom-theme .history-header path { fill: var(--theme-divider-fill) !important; stroke: var(--theme-divider-stroke) !important; }
+.custom-theme .history-textarea {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 53px,
+    var(--theme-history-line) 53px,
+    var(--theme-history-line) 54px
+  ) !important;
+}
+
+/* нижний орнамент */
+.custom-theme .bottom-ornament line,
+.custom-theme .bottom-ornament circle[stroke] { stroke: var(--theme-divider-stroke) !important; }
+.custom-theme .bottom-ornament circle[fill="#d4a96a"] { fill: var(--theme-scroll-fill1) !important; }
+.custom-theme .bottom-ornament circle[fill="#c49050"] { fill: var(--theme-divider-fill) !important; }
+.custom-theme .bottom-ornament circle[fill="#7a4a1a"] { fill: var(--theme-divider-dot) !important; }
+
+/* бейдж роли */
+.custom-theme .role-badge-inner {
+  background: var(--theme-badge-bg) !important;
+  border-color: var(--theme-border-color) !important;
+}
+.custom-theme .role-badge-inner::before,
+.custom-theme .role-badge-inner::after {
+  background: var(--theme-badge-dot) !important;
+  border-color: var(--theme-border-color) !important;
+}
 .custom-theme .role-badge-icon { color: var(--theme-icon-color) !important; }
-.custom-theme .role-badge-text { color: var(--theme-label-color) !important; }
+.custom-theme .role-badge-text { color: var(--theme-badge-text) !important; }
+.custom-theme .role-badge-edit-input {
+  color: var(--theme-badge-text) !important;
+  background: var(--theme-rank-bg) !important;
+  border-color: var(--theme-input-border) !important;
+}
+
+/* хэндлы ресайза */
+.custom-theme #sheet-resize-handle,
+.custom-theme #sheet-resize-x {
+  background: var(--theme-rank-bg) !important;
+  border-color: var(--theme-border-color) !important;
+}
+.custom-theme #sheet-resize-handle line,
+.custom-theme #sheet-resize-x line { stroke: var(--theme-border-color) !important; }
+
+/* кнопка удаления поля — читабельна и на тёмной, и на светлой теме */
+.custom-theme .field-delete-btn { background: var(--theme-rank-bg) !important; }
 
 /* ============================================================
-   DUAL MODE — ЕДИНСТВЕННЫЙ БЛОК
-   ============================================================ */
-
-/* ============================================================
-   DUAL MODE — ЕДИНСТВЕННЫЙ БЛОК
+   DUAL MODE
    ============================================================ */
 
 #sheet.dual-mode {
@@ -1794,16 +1900,246 @@ body {
 }
 
 /* ============================================================
-   GPU-УСКОРЕНИЕ
+   ПАНЕЛЬ ТЕМЫ (модалка)
    ============================================================ */
-#sheet,
+.theme-modal-box {
+  min-width: 460px;
+  max-width: 540px;
+}
+
+.theme-preview {
+  height: 88px;
+  border: 2px solid #7a4a1a;
+  border-radius: 4px;
+  margin-bottom: 18px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.theme-preview-label {
+  font-family: "Uncial Antiqua", "Cormorant Garamond", serif;
+  font-size: 20px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.theme-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(122, 74, 26, 0.15);
+}
+
+.theme-row:last-of-type { border-bottom: none; }
+
+.theme-row > label {
+  font-size: 15px;
+  color: #3b1f0a;
+  min-width: 118px;
+  white-space: nowrap;
+}
+
+.theme-row input[type="range"] {
+  flex: 1;
+  height: 6px;
+  cursor: pointer;
+  accent-color: #8b6914;
+  min-width: 0;
+}
+
+.theme-row .theme-val {
+  font-family: "Cormorant Garamond", serif;
+  font-weight: 600;
+  font-size: 13px;
+  color: #6a3a10;
+  min-width: 46px;
+  text-align: right;
+}
+
+#theme-hue-slider {
+  background: linear-gradient(
+    to right,
+    #ff0000 0%, #ffff00 17%, #00ff00 33%,
+    #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%
+  );
+  border-radius: 3px;
+  -webkit-appearance: none;
+  appearance: none;
+  accent-color: transparent;
+}
+
+#theme-sat-slider,
+#theme-light-slider {
+  border-radius: 3px;
+  -webkit-appearance: none;
+  appearance: none;
+  accent-color: transparent;
+}
+
+.theme-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #f5e6c8;
+  border: 2px solid #5a2e0e;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.theme-row input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #f5e6c8;
+  border: 2px solid #5a2e0e;
+  cursor: pointer;
+}
+
+.theme-color-input {
+  width: 46px;
+  height: 30px;
+  border: 1px solid #7a4a1a;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.theme-hex-input {
+  width: 104px;
+  font-family: "Cormorant Garamond", serif;
+  font-size: 15px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #2a1206;
+  background: rgba(245, 228, 185, 0.7);
+  border: 1px solid #9a6425;
+  padding: 5px 8px;
+  outline: none;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  color: #3b1f0a;
+  cursor: pointer;
+  user-select: none;
+}
+
+.theme-toggle input { width: 17px; height: 17px; accent-color: #8b6914; cursor: pointer; }
+
+.theme-presets-title {
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #6a3a10;
+  opacity: 0.8;
+  margin: 16px 0 8px;
+}
+
+.theme-presets {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 7px;
+  max-height: 190px;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.theme-swatch {
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1.5px solid rgba(122, 74, 26, 0.55);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+
+.theme-swatch:hover {
+  transform: scale(1.12);
+  border-color: #daa520;
+}
+
+.theme-swatch.active {
+  border-color: #daa520;
+  box-shadow: 0 0 0 2px rgba(218, 165, 32, 0.45);
+}
+
+#theme-reset {
+  background: rgba(100, 60, 20, 0.15);
+  color: #5a2e0e;
+}
+
+#theme-apply {
+  background: #3b1f0a;
+  color: #f5e6c8;
+}
+
+#theme-apply:hover { background: #5a2e0e; }
+
+/* ============================================================
+   ПРОИЗВОДИТЕЛЬНОСТЬ / 60 FPS
+   ============================================================
+   will-change включается ТОЛЬКО во время взаимодействия —
+   постоянный композитный слой на лист 2000×4000 съедает
+   сотни МБ видеопамяти и роняет FPS.
+   ============================================================ */
+#sheet {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  contain: layout paint style;
+}
+
+/* Во время pan / zoom / resize */
+#sheet.is-interacting,
+#canvas-area.is-interacting #sheet {
+  will-change: transform;
+}
+
 #portrait-img,
 #sheet-bg-layer img {
-  will-change: transform;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
 
-.portrait-img-wrapper:not(.active) #portrait-img {
-  will-change: auto;
+#portrait-img.is-interacting,
+#sheet-bg-layer img.is-interacting {
+  will-change: transform;
 }
+
+/* Тяжёлые блоки выводим из общего лэйаут-пересчёта */
+.field-row,
+.custom-field-row,
+.erythrogen-block,
+.history-block,
+.section-divider {
+  contain: layout style;
+}
+
+/* Во время перетаскивания отключаем лишние переходы */
+.is-dragging * {
+  transition: none !important;
+  animation-play-state: paused !important;
+}
+
+/* Уважаем системную настройку «меньше движения» */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
