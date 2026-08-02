@@ -66,28 +66,35 @@ const MAX_SCALE = 5;
 const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
 
 const RANKS = [
-  { letter: "D", name: "Латентный", range: "0 — 499", min: 0, cls: "rc-d" },
-  { letter: "C", name: "Средний", range: "500 — 999", min: 500, cls: "rc-c" },
+  { letter: "D", name: "Латентный", range: "0 — 999", min: 0, cls: "rc-d" },
+  { letter: "C", name: "Средний", range: "1000 — 1999", min: 1000, cls: "rc-c" },
   {
     letter: "B",
     name: "Продвинутый",
-    range: "1000 — 1999",
-    min: 1000,
+    range: "2000 — 2999",
+    min: 2000,
     cls: "rc-b",
   },
-  { letter: "A", name: "Высший", range: "2000 — 3499", min: 2000, cls: "rc-a" },
+  { letter: "A", name: "Высший", range: "3000 — 3999", min: 3000, cls: "rc-a" },
+  {
+    letter: "A+",
+    name: "Совершенный",
+    range: "4000 — 4499",
+    min: 4000,
+    cls: "rc-aa",
+  },
   {
     letter: "S",
     name: "Легендарный",
-    range: "3500 — 4999",
-    min: 3500,
+    range: "4500 — 5499",
+    min: 4500,
     cls: "rc-s",
   },
   {
     letter: "S+",
     name: "Запредельный",
-    range: "5000+",
-    min: 5000,
+    range: "5500 — 5999",
+    min: 5500,
     cls: "rc-ss",
   },
   { letter: "G", name: "Бог", range: "6000+", min: 6000, cls: "rc-g" },
@@ -546,6 +553,8 @@ function collectState() {
       const cf = store.find((f) => f.id === id);
       if (cf && inp) cf.value = inp.value;
     });
+    // Новые блоки (шкала, список, цитата, теги) держат состояние
+    // в самом объекте — его пишут обработчики ввода.
   };
   syncCustom(fieldsList, S.customFields);
   syncCustom($("fields-list-right"), S.customFields2);
@@ -1812,8 +1821,14 @@ function initAddField() {
 
   const labelInput = $("new-field-label");
 
-  on($("add-field-btn"), "click", () => openModal(modal));
+  on($("add-field-btn"), "click", () => {
+    syncFieldModal();
+    openModal(modal);
+  });
   bindModal(modal, $("modal-cancel"));
+
+  // Подсказка и доступность контролов зависят от выбранного типа
+  on($("new-field-type"), "change", syncFieldModal);
 
   // Enter в поле названия = «Добавить»
   on(labelInput, "keydown", (e) => {
@@ -1827,28 +1842,32 @@ function initAddField() {
     const label = labelInput.value.trim();
     const type = $("new-field-type").value;
     const icon = $("new-field-icon").value;
-    if (!label) {
+    // Цитате подпись не нужна — текст вводится прямо в блоке
+    if (!label && type !== "quote") {
       labelInput.focus();
-      showToast("Введите название поля", true);
+      showToast("Введите название", true);
       return;
     }
 
     S.customCounter++;
-    const fL = { id: `custom_${S.customCounter}`, label, type, icon, value: "" };
+    const make = (id) => {
+      const b = { id, label, type, icon, value: "" };
+      if (type === "list") b.items = [""];
+      if (type === "quote") b.author = "";
+      if (type === "stat") b.value = 0;
+      if (type === "heading") b.value = label;
+      return b;
+    };
+
+    const fL = make(`custom_${S.customCounter}`);
     S.customFields.push(fL);
-    renderCustomField(fL);
+    renderCustomBlock(fL);
 
     if (S.dualMode) {
-      const fR = {
-        id: `r-custom_${S.customCounter}`,
-        label,
-        type,
-        icon,
-        value: "",
-      };
+      const fR = make(`r-custom_${S.customCounter}`);
       S.customFields2.push(fR);
       const rl = $("fields-list-right");
-      if (rl) renderCustomField(fR, rl, true);
+      if (rl) renderCustomBlock(fR, rl, true);
     }
 
     labelInput.value = "";
@@ -1858,6 +1877,331 @@ function initAddField() {
     saveTempState();
     showToast(`Поле «${label}» добавлено`);
   });
+}
+
+const FIELD_TYPE_INFO = {
+  input: {
+    hint: "Одна строка текста — имя, возраст, титул.",
+    labelPh: "Оружие, Титул, Родина...",
+  },
+  textarea: {
+    hint: "Абзац текста, растёт под содержимое.",
+    labelPh: "Описание, Способности...",
+  },
+  list: {
+    hint: "Пункты с ромбовидными маркерами. Enter добавляет следующий.",
+    labelPh: "Снаряжение, Умения...",
+  },
+  stat: {
+    hint: "Шкала 0–10. Значение задаётся кликом по делению.",
+    labelPh: "Сила, Ловкость, Магия...",
+  },
+  tags: {
+    hint: "Короткие черты через запятую — рисуются плашками.",
+    labelPh: "Характер, Метки...",
+  },
+  quote: {
+    hint: "Реплика в кавычках с подписью. Название не обязательно.",
+    labelPh: "не обязательно",
+  },
+  heading: {
+    hint: "Крупная надпись с линиями по бокам — делит анкету на разделы.",
+    labelPh: "Биография, Снаряжение...",
+  },
+};
+
+/** Подстраивает модалку под выбранный тип блока. */
+function syncFieldModal() {
+  const typeSel = $("new-field-type");
+  const hint = $("new-field-hint");
+  const labelInput = $("new-field-label");
+  const iconRow = $("new-field-icon")?.closest(".modal-row");
+  if (!typeSel) return;
+
+  const info = FIELD_TYPE_INFO[typeSel.value] || FIELD_TYPE_INFO.input;
+  if (hint) hint.textContent = info.hint;
+  if (labelInput) labelInput.placeholder = info.labelPh;
+
+  // У заголовка, цитаты и разделителя иконки нет — прячем строку выбора
+  if (iconRow)
+    iconRow.style.display = ["heading", "quote"].includes(typeSel.value)
+      ? "none"
+      : "";
+}
+
+/**
+ * Роутер пользовательских блоков.
+ * Раньше было жёсткое «divider или поле», теперь типов больше.
+ */
+function renderCustomBlock(f, container = null, isR = false) {
+  switch (f.type) {
+    case "divider":
+      return renderCustomDivider(f, container, isR);
+    case "heading":
+      return renderHeadingBlock(f, container, isR);
+    case "stat":
+      return renderStatBlock(f, container, isR);
+    case "quote":
+      return renderQuoteBlock(f, container, isR);
+    case "tags":
+      return renderTagsBlock(f, container, isR);
+    case "list":
+      return renderListBlock(f, container, isR);
+    default:
+      return renderCustomField(f, container, isR);
+  }
+}
+
+/** Общая обвязка блока: контейнер + кнопка удаления + ручка перетаскивания. */
+function makeBlockShell(f, isR, className, iconHtml) {
+  const w = document.createElement("div");
+  w.className = className;
+  w.dataset.fieldId = f.id;
+  const side = isR || String(f.id).startsWith("r-") ? ' data-side="right"' : "";
+  w.innerHTML =
+    `<div class="field-delete-btn ui-only" data-target="${esc(f.id)}"${side} title="Удалить">✕</div>` +
+    `<div class="field-icon-wrap ${iconHtml ? "" : "block-drag-handle ui-only"}" title="Перетащить">${
+      iconHtml || DRAG_HANDLE_SVG
+    }</div>`;
+  return w;
+}
+
+const DRAG_HANDLE_SVG = `<svg class="ficon" viewBox="0 0 36 36"><line x1="8" y1="12" x2="28" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="8" y1="18" x2="28" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="8" y1="24" x2="28" y2="24" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+
+/** Привязывает поле ввода к свойству блока с автосохранением. */
+function bindValue(el, obj, key, extra) {
+  el.value = obj[key] || "";
+  el.addEventListener("input", () => {
+    obj[key] = el.value;
+    extra?.();
+    saveTempStateSoon();
+  });
+  el.addEventListener("change", () => {
+    obj[key] = el.value;
+    saveTempStateSoon(0);
+  });
+}
+
+// ─────────────────────────────────────────────
+//  ЗАГОЛОВОК РАЗДЕЛА
+// ─────────────────────────────────────────────
+function renderHeadingBlock(f, container = null, isR = false) {
+  const c = container || fieldsList;
+  if (!c || c.querySelector(`[data-field-id="${cssEscape(f.id)}"]`)) return;
+
+  const w = makeBlockShell(f, isR, "custom-block heading-block");
+  const inner = document.createElement("div");
+  inner.className = "heading-inner";
+  inner.innerHTML =
+    `<span class="heading-rule" aria-hidden="true"></span>` +
+    `<input type="text" class="heading-input" placeholder="Название раздела" autocomplete="off" maxlength="60"/>` +
+    `<span class="heading-rule" aria-hidden="true"></span>`;
+  w.appendChild(inner);
+
+  const inp = inner.querySelector(".heading-input");
+  if (!f.value && f.label) f.value = f.label;
+  bindValue(inp, f, "value");
+
+  c.appendChild(w);
+}
+
+// ─────────────────────────────────────────────
+//  ШКАЛА ХАРАКТЕРИСТИКИ
+// ─────────────────────────────────────────────
+const STAT_MAX = 10;
+
+function renderStatBlock(f, container = null, isR = false) {
+  const c = container || fieldsList;
+  if (!c || c.querySelector(`[data-field-id="${cssEscape(f.id)}"]`)) return;
+
+  const ic = FIELD_ICONS[f.icon] || FIELD_ICONS.star;
+  const w = makeBlockShell(f, isR, "custom-block stat-block", ic);
+
+  const body = document.createElement("div");
+  body.className = "stat-body";
+  body.innerHTML =
+    `<span class="field-label stat-label">${esc(f.label)}</span>` +
+    `<div class="stat-row">` +
+    `<div class="stat-bar">${Array.from(
+      { length: STAT_MAX },
+      (_, i) => `<span class="stat-pip" data-i="${i + 1}"></span>`,
+    ).join("")}</div>` +
+    `<span class="stat-value"><span class="stat-num">0</span><span class="stat-max">/${STAT_MAX}</span></span>` +
+    `</div>`;
+  w.appendChild(body);
+
+  const pips = Array.from(body.querySelectorAll(".stat-pip"));
+  const num = body.querySelector(".stat-num");
+
+  const paint = () => {
+    const v = clamp(Number(f.value) || 0, 0, STAT_MAX);
+    pips.forEach((p, i) => p.classList.toggle("on", i < v));
+    num.textContent = String(v);
+  };
+
+  // Клик по делению задаёт значение, повторный клик по текущему — сбрасывает
+  body.querySelector(".stat-bar").addEventListener("click", (e) => {
+    const pip = e.target.closest(".stat-pip");
+    if (!pip) return;
+    const i = Number(pip.dataset.i);
+    f.value = Number(f.value) === i ? i - 1 : i;
+    paint();
+    saveTempStateSoon(0);
+  });
+
+  paint();
+  c.appendChild(w);
+}
+
+// ─────────────────────────────────────────────
+//  ЦИТАТА
+// ─────────────────────────────────────────────
+function renderQuoteBlock(f, container = null, isR = false) {
+  const c = container || fieldsList;
+  if (!c || c.querySelector(`[data-field-id="${cssEscape(f.id)}"]`)) return;
+
+  const w = makeBlockShell(f, isR, "custom-block quote-block");
+  const inner = document.createElement("div");
+  inner.className = "quote-inner";
+  inner.innerHTML =
+    `<span class="quote-mark quote-mark-open" aria-hidden="true">«</span>` +
+    `<div class="quote-body">` +
+    `<textarea class="quote-text" rows="2" placeholder="Реплика или девиз персонажа..."></textarea>` +
+    `<input type="text" class="quote-author" placeholder="— кто сказал" autocomplete="off" maxlength="60"/>` +
+    `</div>` +
+    `<span class="quote-mark quote-mark-close" aria-hidden="true">»</span>`;
+  w.appendChild(inner);
+
+  const ta = inner.querySelector(".quote-text");
+  bindValue(ta, f, "value", () => autoGrow(ta));
+  bindValue(inner.querySelector(".quote-author"), f, "author");
+
+  c.appendChild(w);
+  autoGrow(ta);
+}
+
+// ─────────────────────────────────────────────
+//  ТЕГИ / ЧЕРТЫ
+// ─────────────────────────────────────────────
+function renderTagsBlock(f, container = null, isR = false) {
+  const c = container || fieldsList;
+  if (!c || c.querySelector(`[data-field-id="${cssEscape(f.id)}"]`)) return;
+
+  const ic = FIELD_ICONS[f.icon] || FIELD_ICONS.rune;
+  const w = makeBlockShell(f, isR, "custom-block tags-block", ic);
+
+  const body = document.createElement("div");
+  body.className = "tags-body";
+  body.innerHTML =
+    `<span class="field-label">${esc(f.label)}</span>` +
+    `<div class="tags-chips"></div>` +
+    `<input type="text" class="tags-input ui-only" placeholder="через запятую: смелый, хитрый, злопамятный" autocomplete="off"/>`;
+  w.appendChild(body);
+
+  const chips = body.querySelector(".tags-chips");
+  const inp = body.querySelector(".tags-input");
+
+  const paint = () => {
+    const list = String(f.value || "")
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
+    chips.replaceChildren();
+    if (!list.length) {
+      const ph = document.createElement("span");
+      ph.className = "tags-empty";
+      ph.textContent = "—";
+      chips.appendChild(ph);
+      return;
+    }
+    list.forEach((tx) => {
+      const chip = document.createElement("span");
+      chip.className = "tag-chip";
+      chip.textContent = tx;
+      chips.appendChild(chip);
+    });
+  };
+
+  bindValue(inp, f, "value", paint);
+  paint();
+  c.appendChild(w);
+}
+
+// ─────────────────────────────────────────────
+//  МАРКИРОВАННЫЙ СПИСОК
+// ─────────────────────────────────────────────
+function renderListBlock(f, container = null, isR = false) {
+  const c = container || fieldsList;
+  if (!c || c.querySelector(`[data-field-id="${cssEscape(f.id)}"]`)) return;
+
+  if (!Array.isArray(f.items)) f.items = f.value ? [String(f.value)] : [""];
+
+  const ic = FIELD_ICONS[f.icon] || FIELD_ICONS.inventory;
+  const w = makeBlockShell(f, isR, "custom-block list-block", ic);
+
+  const body = document.createElement("div");
+  body.className = "list-body";
+  body.innerHTML =
+    `<span class="field-label">${esc(f.label)}</span>` +
+    `<div class="list-items"></div>` +
+    `<button type="button" class="list-add ui-only">＋ пункт</button>`;
+  w.appendChild(body);
+
+  const itemsBox = body.querySelector(".list-items");
+
+  function addRow(text, idx) {
+    const row = document.createElement("div");
+    row.className = "list-item";
+    row.innerHTML =
+      `<span class="list-bullet" aria-hidden="true">◆</span>` +
+      `<input type="text" class="list-item-input" placeholder="—" autocomplete="off"/>` +
+      `<button type="button" class="list-del ui-only" title="Убрать пункт">✕</button>`;
+    const inp = row.querySelector(".list-item-input");
+    inp.value = text || "";
+    inp.addEventListener("input", () => {
+      f.items[idx] = inp.value;
+      saveTempStateSoon();
+    });
+    inp.addEventListener("change", () => {
+      f.items[idx] = inp.value;
+      saveTempStateSoon(0);
+    });
+    // Enter добавляет следующий пункт — как в обычном редакторе списков
+    inp.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      f.items.splice(idx + 1, 0, "");
+      rebuild();
+      itemsBox.children[idx + 1]?.querySelector("input")?.focus();
+      saveTempStateSoon(0);
+    });
+    row.querySelector(".list-del").addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      f.items.splice(idx, 1);
+      if (!f.items.length) f.items.push("");
+      rebuild();
+      saveTempStateSoon(0);
+    });
+    itemsBox.appendChild(row);
+  }
+
+  function rebuild() {
+    itemsBox.replaceChildren();
+    f.items.forEach((tx, i) => addRow(tx, i));
+  }
+
+  body.querySelector(".list-add").addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    f.items.push("");
+    rebuild();
+    itemsBox.lastElementChild?.querySelector("input")?.focus();
+    saveTempStateSoon(0);
+  });
+
+  rebuild();
+  c.appendChild(w);
 }
 
 function renderCustomField(f, container = null, isR = false) {
@@ -2228,8 +2572,7 @@ function applyDualMode() {
 
       // Пользовательские поля второго персонажа
       S.customFields2.forEach((f) => {
-        if (f.type === "divider") renderCustomDivider(f, rl, true);
-        else renderCustomField(f, rl, true);
+        renderCustomBlock(f, rl, true);
       });
       applyFieldOrder2();
 
@@ -2439,6 +2782,8 @@ function getExportTheme() {
       historyLine: S.theme.historyLine,
       numberColor: S.theme.eryNumberColor,
       badgeText: S.theme.badgeText,
+      headingColor: S.theme.labelColor,
+      quoteAuthor: S.theme.labelColor,
     };
 
   const b = {
@@ -2455,6 +2800,8 @@ function getExportTheme() {
     historyLine: "rgba(100,60,20,0.13)",
     numberColor: "#8b0000",
     badgeText: "#5a3a0a",
+    headingColor: "#7a4a1a",
+    quoteAuthor: "#8b5a1a",
   };
 
   // Тёмные ролевые темы требуют светлого текста при экспорте
@@ -2473,6 +2820,8 @@ function getExportTheme() {
       historyLine: "rgba(220,80,120,0.12)",
       numberColor: "#ff4080",
       badgeText: "#ffd0dc",
+      headingColor: "#f8a0bc",
+      quoteAuthor: "#f08098",
     },
   };
 
@@ -2548,6 +2897,44 @@ async function exportToPNG(ret = false) {
     );
   });
 
+  // ——— Заголовки разделов ———
+  sheet.querySelectorAll(".heading-input").forEach((inp) => {
+    const v = inp.value || "";
+    const cs = getComputedStyle(inp);
+    replace(
+      inp,
+      makeDiv(
+        v || "РАЗДЕЛ",
+        `font-family:'Uncial Antiqua','Cormorant Garamond',serif;font-size:${cssVal(cs, "fontSize", Math.round(S.labelFontSize * 1.5) + "px")};color:${v ? theme.headingColor : theme.inputPlaceholder};background:transparent;border:none;text-align:center;letter-spacing:6px;text-transform:uppercase;line-height:1.25;padding:0 6px;white-space:nowrap;font-style:${v ? "normal" : "italic"}`,
+      ),
+    );
+  });
+
+  // ——— Цитаты ———
+  sheet.querySelectorAll(".quote-author").forEach((inp) => {
+    const v = inp.value || "";
+    const cs = getComputedStyle(inp);
+    replace(
+      inp,
+      makeDiv(
+        v,
+        `font-family:'Cormorant Garamond',serif;font-size:${cssVal(cs, "fontSize", Math.round(S.inputFontSize * 0.68) + "px")};color:${theme.quoteAuthor};background:transparent;border:none;display:block;width:100%;text-align:right;letter-spacing:2px;padding:0;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis`,
+      ),
+    );
+  });
+
+  // ——— Пункты списков ———
+  sheet.querySelectorAll(".list-item-input").forEach((inp) => {
+    const v = inp.value || "";
+    replace(
+      inp,
+      makeDiv(
+        v || "—",
+        `font-family:'Philosopher',serif;font-size:${S.inputFontSize}px;color:${v ? theme.inputColor : theme.inputPlaceholder};background:transparent;display:block;width:100%;border:none;border-bottom:1px dashed ${theme.inputBorder};padding:3px 0 5px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;font-style:${v ? "normal" : "italic"}`,
+      ),
+    );
+  });
+
   // ——— Обычные текстовые поля ———
   sheet
     .querySelectorAll('input[type="text"], input:not([type])')
@@ -2555,6 +2942,10 @@ async function exportToPNG(ret = false) {
       if (
         inp.classList.contains("header-name-input") ||
         inp.classList.contains("ery-number-input") ||
+        inp.classList.contains("heading-input") ||
+        inp.classList.contains("quote-author") ||
+        inp.classList.contains("list-item-input") ||
+        inp.classList.contains("tags-input") ||
         inp.id === "role-badge-edit-input"
       )
         return;
@@ -2576,7 +2967,7 @@ async function exportToPNG(ret = false) {
       inp,
       makeDiv(
         v || "0",
-        `font-family:'Cormorant Garamond',serif;font-size:${S.eryFontSize}px;font-weight:700;color:${theme.numberColor};background:transparent;display:inline-block;width:${cs.width};border:none;padding:0;margin-left:${cs.marginLeft};opacity:${v ? "1" : "0.3"};vertical-align:baseline;line-height:1`,
+        `font-family:'Cormorant Garamond',serif;font-size:${S.eryFontSize}px;font-weight:700;color:${theme.numberColor};background:transparent;display:inline-block;width:${cssVal(cs, "width", "180px")};border:none;padding:0;margin-left:${cssVal(cs, "marginLeft", "20px")};opacity:${v ? "1" : "0.3"};vertical-align:baseline;line-height:1`,
       ),
     );
   });
@@ -2586,11 +2977,27 @@ async function exportToPNG(ret = false) {
     const v = ta.value || "";
     const isH = ta.classList.contains("history-textarea");
     const cs = getComputedStyle(ta);
+
+    // Цитата: курсив, без подчёркивания, высота по содержимому
+    if (ta.classList.contains("quote-text")) {
+      const qh = Math.max(ta.scrollHeight, ta.offsetHeight, 58);
+      replace(
+        ta,
+        makeDiv(
+          v || ta.placeholder || "",
+          `font-family:'Philosopher',serif;font-size:${cssVal(cs, "fontSize", S.inputFontSize + "px")};font-style:italic;color:${v ? theme.inputColor : theme.inputPlaceholder};background:transparent;display:block;width:100%;min-height:${qh}px;border:none;padding:0;line-height:1.45;white-space:pre-wrap;word-break:break-word;overflow:hidden;box-sizing:border-box`,
+        ),
+      );
+      return;
+    }
+
     // Реальная высота, а не жёстко зашитые 580px: длинная история
     // раньше обрезалась при экспорте
     const height = Math.max(ta.scrollHeight, ta.offsetHeight, isH ? 580 : 54);
-    const fontSize = isH ? cs.fontSize : S.inputFontSize + "px";
-    const lineHeight = isH ? cs.lineHeight || "54px" : "1.5";
+    const fontSize = isH
+      ? cssVal(cs, "fontSize", "36px")
+      : S.inputFontSize + "px";
+    const lineHeight = isH ? cssVal(cs, "lineHeight", "54px") : "1.5";
     const bg = isH
       ? `background-image:repeating-linear-gradient(to bottom,transparent 0px,transparent 53px,${theme.historyLine} 53px,${theme.historyLine} 54px);`
       : "";
@@ -2660,6 +3067,23 @@ async function exportToPNG(ret = false) {
   a.click();
   a.remove();
   return dataUrl;
+}
+
+/**
+ * Значение вычисленного стиля с запасным вариантом.
+ * getComputedStyle может вернуть пустую строку (например, пока
+ * не разрешён calc()) — без подстраховки в CSS уедет «font-size:;»
+ * и html2canvas свалится на разборе.
+ */
+function cssVal(cs, prop, fallback) {
+  const v = cs?.[prop];
+  if (!v) return fallback;
+  const str = String(v).trim();
+  if (!str || str === "0px" || str === "normal") return fallback;
+  // html2canvas не умеет var()/calc() — если браузер их не развернул,
+  // берём заранее посчитанное запасное значение в пикселях.
+  if (/var\(|calc\(/i.test(str)) return fallback;
+  return str;
 }
 
 function makeDiv(t, css) {
@@ -2912,8 +3336,7 @@ function restoreAll() {
   // Пользовательские поля
   if (!S._fieldsRendered) {
     S.customFields.forEach((f) => {
-      if (f.type === "divider") renderCustomDivider(f);
-      else renderCustomField(f);
+      renderCustomBlock(f);
     });
     S._fieldsRendered = true;
   }

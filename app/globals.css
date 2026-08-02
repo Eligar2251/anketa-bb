@@ -755,6 +755,360 @@ body {
 }
 
 /* ============================================================
+   ПОЛЬЗОВАТЕЛЬСКИЕ БЛОКИ
+   (заголовок, шкала, цитата, теги, список)
+   ============================================================ */
+.custom-block {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 22px;
+  padding: 22px 56px 22px 0;
+  min-width: 0;
+  contain: layout style;
+}
+
+.custom-block .field-icon-wrap {
+  flex-shrink: 0;
+  width: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  padding-top: 4px;
+}
+
+.custom-block .block-drag-handle {
+  opacity: 0.4;
+  transition: opacity 0.15s;
+}
+
+.custom-block .block-drag-handle:hover { opacity: 0.85; }
+.custom-block .block-drag-handle .ficon { width: 26px; height: 26px; }
+
+/* ── Заголовок раздела ── */
+.heading-block {
+  padding-top: 34px;
+  padding-bottom: 10px;
+  align-items: center;
+}
+
+.heading-inner {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-width: 0;
+}
+
+.heading-rule {
+  flex: 1;
+  height: 2px;
+  min-width: 24px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgba(122, 74, 26, 0.55),
+    transparent
+  );
+}
+
+.heading-input {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 200px;
+  max-width: 70%;
+  font-family: "Uncial Antiqua", "Cormorant Garamond", serif;
+  font-size: calc(var(--label-font-size) * 1.5);
+  color: #7a4a1a;
+  background: transparent;
+  border: none;
+  outline: none;
+  text-align: center;
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  line-height: 1.25;
+  padding: 0 6px;
+}
+
+.heading-input::placeholder {
+  color: rgba(122, 74, 26, 0.35);
+  font-style: italic;
+}
+
+/* ── Шкала характеристики ── */
+.stat-block { align-items: center; }
+
+.stat-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.stat-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-width: 0;
+}
+
+.stat-bar {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.stat-pip {
+  flex: 1;
+  height: 26px;
+  max-width: 62px;
+  border: 2px solid rgba(122, 74, 26, 0.5);
+  background: rgba(122, 74, 26, 0.07);
+  border-radius: 2px;
+  transition: background 0.12s ease;
+}
+
+.stat-pip.on {
+  background: #9a6425;
+  border-color: #7a4a1a;
+}
+
+.stat-value {
+  flex-shrink: 0;
+  font-family: "Cormorant Garamond", serif;
+  font-weight: 700;
+  color: #7a4a1a;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.stat-num { font-size: calc(var(--input-font-size) * 0.95); }
+
+.stat-max {
+  font-size: calc(var(--input-font-size) * 0.6);
+  opacity: 0.55;
+}
+
+/* ── Цитата ── */
+.quote-block { align-items: stretch; }
+
+.quote-inner {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 0 10px 22px;
+  border-left: 4px solid rgba(122, 74, 26, 0.4);
+}
+
+.quote-mark {
+  font-family: "Cormorant Garamond", serif;
+  font-size: calc(var(--input-font-size) * 1.9);
+  line-height: 0.8;
+  color: rgba(122, 74, 26, 0.45);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.quote-mark-close { align-self: flex-end; }
+
+.quote-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.quote-text {
+  width: 100%;
+  font-family: "Philosopher", serif;
+  font-size: var(--input-font-size);
+  font-style: italic;
+  color: #3b1f0a;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  line-height: 1.45;
+  min-height: 58px;
+  padding: 0;
+}
+
+.quote-author {
+  width: 100%;
+  font-family: "Cormorant Garamond", serif;
+  font-size: calc(var(--input-font-size) * 0.68);
+  color: #8b5a1a;
+  background: transparent;
+  border: none;
+  outline: none;
+  text-align: right;
+  letter-spacing: 2px;
+  padding: 0;
+}
+
+.quote-text::placeholder,
+.quote-author::placeholder {
+  color: rgba(122, 74, 26, 0.28);
+  font-style: italic;
+}
+
+/* ── Теги / черты ── */
+.tags-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tags-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tag-chip {
+  font-family: "Philosopher", serif;
+  font-size: calc(var(--input-font-size) * 0.72);
+  color: #3b1f0a;
+  background: rgba(196, 144, 80, 0.22);
+  border: 1.5px solid rgba(122, 74, 26, 0.45);
+  border-radius: 999px;
+  padding: 5px 20px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.tags-empty {
+  font-family: "Philosopher", serif;
+  font-size: calc(var(--input-font-size) * 0.72);
+  color: rgba(122, 74, 26, 0.3);
+  font-style: italic;
+}
+
+.tags-input {
+  width: 100%;
+  font-family: "Philosopher", serif;
+  font-size: calc(var(--input-font-size) * 0.6);
+  color: #5a3a12;
+  background: rgba(122, 74, 26, 0.05);
+  border: 1px dashed rgba(122, 74, 26, 0.3);
+  border-radius: 3px;
+  outline: none;
+  padding: 6px 10px;
+}
+
+.tags-input::placeholder {
+  color: rgba(122, 74, 26, 0.32);
+  font-style: italic;
+}
+
+/* ── Маркированный список ── */
+.list-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.list-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.list-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.list-bullet {
+  flex-shrink: 0;
+  color: #9a6425;
+  font-size: calc(var(--input-font-size) * 0.5);
+  line-height: 1;
+  user-select: none;
+}
+
+.list-item-input {
+  flex: 1;
+  min-width: 0;
+  font-family: "Philosopher", serif;
+  font-size: var(--input-font-size);
+  color: #1e0e04;
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed rgba(122, 74, 26, 0.28);
+  outline: none;
+  padding: 3px 0 5px;
+  line-height: 1.4;
+}
+
+.list-item-input::placeholder {
+  color: rgba(122, 74, 26, 0.26);
+  font-style: italic;
+}
+
+.list-del {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(139, 0, 0, 0.35);
+  border-radius: 50%;
+  background: rgba(245, 228, 185, 0.5);
+  color: #8b0000;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.list-item:hover .list-del { opacity: 1; }
+
+.list-del:hover {
+  background: #8b0000;
+  color: #fff;
+}
+
+.list-add {
+  align-self: flex-start;
+  margin-top: 4px;
+  font-family: "Philosopher", serif;
+  font-size: calc(var(--input-font-size) * 0.55);
+  color: #7a4a1a;
+  background: rgba(122, 74, 26, 0.08);
+  border: 1px dashed rgba(122, 74, 26, 0.35);
+  border-radius: 3px;
+  padding: 5px 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.list-add:hover { background: rgba(122, 74, 26, 0.2); }
+
+/* Подсказка в модалке добавления */
+.modal-hint {
+  font-size: 13px;
+  color: #7a4a1a;
+  opacity: 0.75;
+  font-style: italic;
+  line-height: 1.35;
+  margin-top: 2px;
+}
+
+/* ============================================================
    ЭРИТРОГЕНЫ
    ============================================================ */
 .erythrogen-block {
@@ -806,6 +1160,17 @@ body {
   font-weight: 700;
   color: #8b0000;
   line-height: 1;
+  /* «A+» / «S+» шире одной буквы — ужимаем, чтобы не вылезали за рамку */
+  max-width: 100%;
+  padding: 0 4px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.rc-aa .rank-letter,
+.rc-ss .rank-letter {
+  font-size: 46px;
+  letter-spacing: -2px;
 }
 
 .ery-number-input {
@@ -897,6 +1262,8 @@ body {
 .rc-b .rank-letter { color: #2a4a9a; }
 .rc-a { border-color: #d4a020; }
 .rc-a .rank-letter { color: #7a5000; }
+.rc-aa { border-color: #e87c1e; }
+.rc-aa .rank-letter { color: #a34a00; }
 .rc-s { border-color: #cc2222; }
 .rc-s .rank-letter { color: #8b0000; }
 .rc-ss { border-color: #1c7a49; }
@@ -1762,6 +2129,55 @@ body {
 
 /* кнопка удаления поля — читабельна и на тёмной, и на светлой теме */
 .custom-theme .field-delete-btn { background: var(--theme-rank-bg) !important; }
+
+/* пользовательские блоки */
+.custom-theme .heading-input { color: var(--theme-label-color) !important; }
+.custom-theme .heading-input::placeholder { color: var(--theme-input-placeholder) !important; }
+.custom-theme .heading-rule {
+  background: linear-gradient(to right, transparent, var(--theme-divider-stroke), transparent) !important;
+}
+
+.custom-theme .stat-pip {
+  border-color: var(--theme-input-border) !important;
+  background: var(--theme-rank-bg) !important;
+}
+.custom-theme .stat-pip.on {
+  background: var(--theme-icon-color) !important;
+  border-color: var(--theme-border-color) !important;
+}
+.custom-theme .stat-value { color: var(--theme-label-color) !important; }
+
+.custom-theme .quote-inner { border-left-color: var(--theme-border-color) !important; }
+.custom-theme .quote-mark { color: var(--theme-icon-color) !important; }
+.custom-theme .quote-text { color: var(--theme-input-color) !important; }
+.custom-theme .quote-author { color: var(--theme-label-color) !important; }
+.custom-theme .quote-text::placeholder,
+.custom-theme .quote-author::placeholder { color: var(--theme-input-placeholder) !important; }
+
+.custom-theme .tag-chip {
+  color: var(--theme-input-color) !important;
+  background: var(--theme-rank-bg) !important;
+  border-color: var(--theme-border-color) !important;
+}
+.custom-theme .tags-empty { color: var(--theme-input-placeholder) !important; }
+.custom-theme .tags-input {
+  color: var(--theme-input-color) !important;
+  background: var(--theme-rank-bg) !important;
+  border-color: var(--theme-input-border) !important;
+}
+.custom-theme .tags-input::placeholder { color: var(--theme-input-placeholder) !important; }
+
+.custom-theme .list-bullet { color: var(--theme-icon-color) !important; }
+.custom-theme .list-item-input {
+  color: var(--theme-input-color) !important;
+  border-bottom-color: var(--theme-input-border) !important;
+}
+.custom-theme .list-item-input::placeholder { color: var(--theme-input-placeholder) !important; }
+.custom-theme .list-add {
+  color: var(--theme-label-color) !important;
+  background: var(--theme-rank-bg) !important;
+  border-color: var(--theme-input-border) !important;
+}
 
 /* ============================================================
    DUAL MODE

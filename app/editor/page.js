@@ -142,7 +142,7 @@ function EditorPageInner() {
             🖼 Фон
           </button>
           <button className="ctrl-btn" id="add-field-btn">
-            ＋ Поле
+            ＋ Блок
           </button>
           <button className="ctrl-btn" id="add-divider-btn">
             — Разделитель
@@ -215,22 +215,30 @@ function EditorPageInner() {
         style={{ display: "none" }}
       >
         <div className="modal-box">
-          <div className="modal-title">Добавить поле</div>
+          <div className="modal-title">Добавить блок</div>
           <div className="modal-row">
             <label>Название:</label>
             <input
               type="text"
               id="new-field-label"
               placeholder="Оружие, Способности..."
-              maxLength={40}
+              maxLength={60}
             />
           </div>
           <div className="modal-row">
             <label>Тип:</label>
             <select id="new-field-type">
               <option value="input">Строка</option>
-              <option value="textarea">Многострочный</option>
+              <option value="textarea">Многострочный текст</option>
+              <option value="list">Список пунктов</option>
+              <option value="stat">Шкала характеристики</option>
+              <option value="tags">Теги / черты</option>
+              <option value="quote">Цитата</option>
+              <option value="heading">Заголовок раздела</option>
             </select>
+            <span className="modal-hint" id="new-field-hint">
+              Одна строка текста — имя, возраст, титул.
+            </span>
           </div>
           <div className="modal-row">
             <label>Иконка:</label>
