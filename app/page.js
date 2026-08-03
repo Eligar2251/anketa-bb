@@ -3,6 +3,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { getSupabase } from "../lib/supabase";
+import { generateCardColors, withCardAlphas } from "../lib/colorUtils";
 
 const ROLE_NAMES = {
   "": "Стандартная",
@@ -127,75 +128,29 @@ const ROLE_STYLES = {
   },
 };
 
-// ===== Утилиты для генерации цветов в галерее =====
-function hexToHsl(hex) {
-  hex = hex.replace("#", "");
-  if (hex.length === 3)
-    hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-  const r = parseInt(hex.substring(0, 2), 16) / 255;
-  const g = parseInt(hex.substring(2, 4), 16) / 255;
-  const b = parseInt(hex.substring(4, 6), 16) / 255;
-  const max = Math.max(r, g, b),
-    min = Math.min(r, g, b);
-  let h = 0,
-    s = 0,
-    l = (max + min) / 2;
-  if (max !== min) {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
-    else if (max === g) h = ((b - r) / d + 2) / 6;
-    else h = ((r - g) / d + 4) / 6;
-  }
-  return { h: h * 360, s: s * 100, l: l * 100 };
-}
-
-function hsl(h, s, l, a) {
-  h = ((h % 360) + 360) % 360;
-  s = Math.max(0, Math.min(100, s));
-  l = Math.max(0, Math.min(100, l));
-  if (a !== undefined && a < 1)
-    return `hsla(${Math.round(h)},${Math.round(s)}%,${Math.round(l)}%,${a})`;
-  return `hsl(${Math.round(h)},${Math.round(s)}%,${Math.round(l)}%)`;
-}
-
-function adaptS(origS, factor, min = 8, max = 95) {
-  return Math.max(min, Math.min(max, origS * factor));
-}
-
-function generateCardColors(baseHex) {
-  const { h, s, l } = hexToHsl(baseHex);
-  const dark = l < 50;
-  const hWarm = (((h + 25) % 360) + 360) % 360;
-
-  if (dark) {
-    return {
-      border: hsl(h, adaptS(s, 0.8, 10, 65), 28),
-      bg: hsl(h, adaptS(s, 0.4, 5, 30), 9, 0.97),
-      accent: hsl(h, adaptS(s, 0.65, 12, 65), 62),
-      text: hsl(hWarm, adaptS(s, 0.15, 3, 18), 94),
-      badge: hsl(h, adaptS(s, 0.7, 10, 65), 28),
-      badgeText: hsl(hWarm, adaptS(s, 0.15, 3, 18), 94),
-    };
-  }
-
-  const hText =
-    (h >= 0 && h <= 60) || h >= 300 ? (h - 10 + 360) % 360 : (h + 10) % 360;
-
-  return {
-    border: hsl(h, adaptS(s, 0.75, 12, 70), 35),
-    bg: hsl(h, adaptS(s, 0.5, 8, 48), 92, 0.97),
-    accent: hsl(h, adaptS(s, 0.6, 10, 58), 40),
-    text: hsl(hText, adaptS(s, 0.35, 5, 38), 12),
-    badge: hsl(h, adaptS(s, 0.6, 10, 58), 50),
-    badgeText: hsl(hText, adaptS(s, 0.25, 5, 28), 10),
-  };
-}
+// Палитра карточек берётся из общего генератора темы —
+// раньше здесь была вторая, слегка расходящаяся копия формул,
+// и карточка в галерее не совпадала по цвету с самой анкетой.
+const _cardStyleCache = new Map();
 
 function getCardStyle(char) {
-  if (char.custom_color) return generateCardColors(char.custom_color);
+  if (char.custom_color) {
+    // Кэш: генератор палитры вызывался на каждый ре-рендер каждой карточки
+    let c = _cardStyleCache.get(char.custom_color);
+    if (!c) {
+      c = generateCardColors(char.custom_color);
+      _cardStyleCache.set(char.custom_color, c);
+    }
+    return c;
+  }
   const roleClass = char.role_class || "";
-  return ROLE_STYLES[roleClass] || ROLE_STYLES[""];
+  const base = ROLE_STYLES[roleClass] || ROLE_STYLES[""];
+  let c = _cardStyleCache.get("role:" + roleClass);
+  if (!c) {
+    c = withCardAlphas(base);
+    _cardStyleCache.set("role:" + roleClass, c);
+  }
+  return c;
 }
 
 // Получить текст роли для бейджа на карточке
@@ -259,7 +214,6 @@ export default function GalleryPage() {
   const [characters, setCharacters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [hoveredId, setHoveredId] = useState(null);
   const [imgErrors, setImgErrors] = useState(new Set());
   const [loadingCharId, setLoadingCharId] = useState(null);
   const [dragId, setDragId] = useState(null);
@@ -282,7 +236,7 @@ export default function GalleryPage() {
         )
         .order("sort_order", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: false })
-        .limit(50);
+        .limit(200);
       if (error) throw error;
       setCharacters(data || []);
     } catch (e) {
@@ -316,33 +270,36 @@ export default function GalleryPage() {
   async function handleDrop(e, targetId) {
     e.preventDefault();
     const sourceId = dragRef.current;
-    if (!sourceId || sourceId === targetId) {
-      setDragId(null);
-      setDragOverId(null);
-      return;
-    }
+    dragRef.current = null;
+    setDragId(null);
+    setDragOverId(null);
+    if (!sourceId || sourceId === targetId) return;
+
+    const prevList = characters;
     const newList = [...characters];
     const fromIdx = newList.findIndex((c) => c.id === sourceId);
     const toIdx = newList.findIndex((c) => c.id === targetId);
     if (fromIdx === -1 || toIdx === -1) return;
+
     const [moved] = newList.splice(fromIdx, 1);
     newList.splice(toIdx, 0, moved);
     setCharacters(newList);
-    setDragId(null);
-    setDragOverId(null);
+
     const db = getSupabase();
-    if (db) {
-      try {
-        const updates = newList.map((c, i) => ({ id: c.id, sort_order: i }));
-        for (const u of updates) {
-          await db
-            .from("characters")
-            .update({ sort_order: u.sort_order })
-            .eq("id", u.id);
-        }
-      } catch (err) {
-        console.error("Sort save error:", err);
-      }
+    if (!db) return;
+    try {
+      // Один upsert вместо N последовательных UPDATE:
+      // раньше перетаскивание в списке из 50 карточек делало
+      // 50 round-trip'ов и подвешивало страницу.
+      const rows = newList.map((c, i) => ({ id: c.id, sort_order: i }));
+      const { error } = await db
+        .from("characters")
+        .upsert(rows, { onConflict: "id" });
+      if (error) throw error;
+    } catch (err) {
+      console.error("Sort save error:", err);
+      setCharacters(prevList); // откат, чтобы UI не врал
+      setError("Не удалось сохранить порядок: " + (err.message || ""));
     }
   }
 
@@ -358,8 +315,10 @@ export default function GalleryPage() {
         .single();
       if (error) throw error;
 
-      let payload =
+      const parsed =
         typeof data.data === "string" ? JSON.parse(data.data) : data.data;
+      // Защита от битой/пустой записи — иначе редактор падал на null
+      const payload = parsed && typeof parsed === "object" ? { ...parsed } : {};
       payload.currentCharacterId = char.id;
 
       // Если двойная анкета — объединяем данные второго персонажа
@@ -369,17 +328,17 @@ export default function GalleryPage() {
             ? JSON.parse(data.duo_partner_data)
             : data.duo_partner_data;
         payload.dualMode = true;
-        payload.fields2 = dp.fields || {};
-        payload.customFields2 = dp.customFields || [];
-        payload.hidden2 = dp.hidden || [];
-        payload.fieldOrder2 = dp.fieldOrder || [];
+        payload.fields2 = dp?.fields || {};
+        payload.customFields2 = dp?.customFields || [];
+        payload.hidden2 = dp?.hidden || [];
+        payload.fieldOrder2 = dp?.fieldOrder || [];
       }
 
       sessionStorage.setItem(TEMP_KEY, JSON.stringify(payload));
       window.location.href = "/editor";
     } catch (e) {
       console.error("Load error:", e);
-      alert("Ошибка загрузки: " + e.message);
+      setError("Ошибка загрузки: " + (e.message || ""));
       setLoadingCharId(null);
     }
   }
@@ -387,13 +346,16 @@ export default function GalleryPage() {
   async function handleDelete(char) {
     const db = getSupabase();
     if (!db) return;
-    if (!confirm(`Удалить «${char.name}»?`)) return;
+    if (!confirm(`Удалить «${char.name || "Безымянный"}»?`)) return;
+    const prevList = characters;
+    // Оптимистичное удаление + откат при ошибке
+    setCharacters((prev) => prev.filter((x) => x.id !== char.id));
     try {
       const { error } = await db.from("characters").delete().eq("id", char.id);
       if (error) throw error;
-      setCharacters((prev) => prev.filter((x) => x.id !== char.id));
     } catch (e) {
-      alert("Ошибка удаления: " + e.message);
+      setCharacters(prevList);
+      setError("Ошибка удаления: " + (e.message || ""));
     }
   }
 
@@ -412,6 +374,33 @@ export default function GalleryPage() {
         ::-webkit-scrollbar-thumb{background:rgba(122,74,26,0.5);border-radius:4px;}
         ::-webkit-scrollbar-thumb:hover{background:rgba(122,74,26,0.7);}
         .drag-over-card{outline:3px dashed #daa520!important;outline-offset:-3px;}
+
+        /* Карточка: ховер целиком на CSS — только composite-свойства,
+           поэтому сетка из сотни карточек держит 60 fps */
+        .char-card{
+          background: var(--card-bg);
+          border: 2px solid var(--card-border);
+          border-radius: 8px;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          box-shadow: 0 3px 12px rgba(0,0,0,0.4);
+          transition: transform .22s ease, box-shadow .22s ease, border-color .18s ease;
+          contain: layout paint style;
+        }
+        .char-card:hover{
+          transform: translate3d(0,-5px,0) scale(1.02);
+          border-color: var(--card-accent);
+          box-shadow: 0 16px 32px rgba(0,0,0,0.5), 0 0 0 1px var(--card-glow);
+        }
+        .char-card .card-load-btn{ transition: filter .18s ease; }
+        .char-card:hover .card-load-btn{ filter: brightness(1.25); }
+        .char-card img{ content-visibility: auto; }
+
+        @media (prefers-reduced-motion: reduce){
+          .char-card{ transition: none; }
+          .char-card:hover{ transform: none; }
+        }
       `}</style>
 
       <div
@@ -649,7 +638,6 @@ export default function GalleryPage() {
                   {characters.map((char) => {
                     const rs = getCardStyle(char);
                     const roleLabel = getCardRoleLabel(char);
-                    const isHovered = hoveredId === char.id;
                     const hasImgErr = imgErrors.has(char.id);
                     const isLoading = loadingCharId === char.id;
                     const isDragOver =
@@ -658,29 +646,21 @@ export default function GalleryPage() {
                     return (
                       <div
                         key={char.id}
-                        draggable
+                        draggable={!isLoading}
                         onDragStart={(e) => handleDragStart(e, char.id)}
                         onDragEnd={handleDragEnd}
                         onDragOver={(e) => handleDragOver(e, char.id)}
                         onDrop={(e) => handleDrop(e, char.id)}
-                        onMouseEnter={() => !isLoading && setHoveredId(char.id)}
-                        onMouseLeave={() => setHoveredId(null)}
-                        className={isDragOver ? "drag-over-card" : ""}
+                        className={
+                          "char-card" + (isDragOver ? " drag-over-card" : "")
+                        }
+                        /* Ховер сделан на CSS: раньше он жил в React-состоянии
+                           и каждое движение мыши перерисовывало ВСЮ сетку. */
                         style={{
-                          background: rs.bg,
-                          border: `2px solid ${isHovered ? rs.accent : rs.border}`,
-                          borderRadius: "8px",
-                          display: "flex",
-                          flexDirection: "column",
-                          overflow: "hidden",
-                          transform: isHovered
-                            ? "translateY(-5px) scale(1.02)"
-                            : "none",
-                          boxShadow: isHovered
-                            ? `0 16px 32px rgba(0,0,0,0.5),0 0 0 1px ${rs.accent}55`
-                            : "0 3px 12px rgba(0,0,0,0.4)",
-                          transition:
-                            "transform 0.25s ease,box-shadow 0.25s ease,border-color 0.2s",
+                          "--card-bg": rs.bg,
+                          "--card-border": rs.border,
+                          "--card-accent": rs.accent,
+                          "--card-glow": rs.accentGlow,
                           opacity: isLoading || dragId === char.id ? 0.5 : 1,
                           cursor: dragId ? "grabbing" : "grab",
                           pointerEvents: isLoading ? "none" : "auto",
@@ -711,7 +691,7 @@ export default function GalleryPage() {
                               style={{
                                 width: "100%",
                                 aspectRatio: "3/4",
-                                background: `linear-gradient(160deg,${rs.border}22,${rs.accent}18)`,
+                                background: `linear-gradient(160deg,${rs.borderSoft},${rs.accentFaint})`,
                                 display: "flex",
                                 flexDirection: "column",
                                 alignItems: "center",
@@ -754,6 +734,7 @@ export default function GalleryPage() {
                               position: "absolute",
                               inset: 0,
                               pointerEvents: "none",
+                              zIndex: 0,
                               background: `linear-gradient(to bottom,transparent 50%,${rs.bg} 100%)`,
                             }}
                           />
@@ -764,6 +745,7 @@ export default function GalleryPage() {
                               position: "absolute",
                               top: "8px",
                               right: "8px",
+                              zIndex: 2,
                               background: rs.badge,
                               color: rs.badgeText,
                               fontSize: "10px",
@@ -772,54 +754,60 @@ export default function GalleryPage() {
                               borderRadius: "3px",
                               letterSpacing: "0.4px",
                               boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
-                              maxWidth: "130px",
+                              maxWidth: "60%",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
                               whiteSpace: "nowrap",
                             }}
+                            title={roleLabel}
                           >
                             {roleLabel}
                           </div>
 
-                          {/* Индикатор двойной анкеты */}
-                          {char.is_duo && (
-                            <div
-                              style={{
-                                position: "absolute",
-                                top: "8px",
-                                left: char.custom_color ? "28px" : "8px",
-                                background: "rgba(0,0,0,0.6)",
-                                color: "#f5e6c8",
-                                fontSize: "10px",
-                                fontWeight: "600",
-                                padding: "3px 7px",
-                                borderRadius: "3px",
-                                letterSpacing: "0.3px",
-                                boxShadow: "0 1px 4px rgba(0,0,0,0.4)",
-                              }}
-                              title={`Пара: ${char.name} & ${char.duo_name || "?"}`}
-                            >
-                              👥
-                            </div>
-                          )}
-
-                          {/* Кастомный цвет — индикатор */}
-                          {char.custom_color && (
-                            <div
-                              style={{
-                                position: "absolute",
-                                top: "8px",
-                                left: "8px",
-                                width: "14px",
-                                height: "14px",
-                                borderRadius: "50%",
-                                background: char.custom_color,
-                                border: "2px solid rgba(255,255,255,0.5)",
-                                boxShadow: "0 1px 4px rgba(0,0,0,0.4)",
-                              }}
-                              title={`Цвет: ${char.custom_color}`}
-                            />
-                          )}
+                          {/* Индикаторы слева — в потоке, без ручных отступов
+                              (раньше бейджи налезали друг на друга) */}
+                          <div
+                            style={{
+                              position: "absolute",
+                              top: "8px",
+                              left: "8px",
+                              zIndex: 2,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "5px",
+                            }}
+                          >
+                            {char.custom_color && (
+                              <span
+                                style={{
+                                  width: "14px",
+                                  height: "14px",
+                                  borderRadius: "50%",
+                                  background: char.custom_color,
+                                  border: "2px solid rgba(255,255,255,0.5)",
+                                  boxShadow: "0 1px 4px rgba(0,0,0,0.4)",
+                                }}
+                                title={`Цвет: ${char.custom_color}`}
+                              />
+                            )}
+                            {char.is_duo && (
+                              <span
+                                style={{
+                                  background: "rgba(0,0,0,0.6)",
+                                  color: "#f5e6c8",
+                                  fontSize: "10px",
+                                  fontWeight: "600",
+                                  padding: "3px 7px",
+                                  borderRadius: "3px",
+                                  letterSpacing: "0.3px",
+                                  boxShadow: "0 1px 4px rgba(0,0,0,0.4)",
+                                }}
+                                title={`Пара: ${char.name || "?"} & ${char.duo_name || "?"}`}
+                              >
+                                👥
+                              </span>
+                            )}
+                          </div>
 
                           {/* Спиннер загрузки */}
                           {isLoading && (
@@ -871,7 +859,7 @@ export default function GalleryPage() {
                           style={{
                             margin: "6px 16px 10px",
                             height: "1px",
-                            background: `linear-gradient(to right,transparent,${rs.accent}55,transparent)`,
+                            background: `linear-gradient(to right,transparent,${rs.accentGlow},transparent)`,
                           }}
                         />
 
@@ -880,10 +868,11 @@ export default function GalleryPage() {
                           style={{
                             display: "flex",
                             marginTop: "auto",
-                            borderTop: `1px solid ${rs.border}35`,
+                            borderTop: `1px solid ${rs.borderFaint}`,
                           }}
                         >
                           <button
+                            className="card-load-btn"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleLoad(char);
@@ -892,9 +881,7 @@ export default function GalleryPage() {
                             style={{
                               flex: 1,
                               border: "none",
-                              background: isHovered
-                                ? `linear-gradient(135deg,${rs.border},${rs.accent})`
-                                : `${rs.border}bb`,
+                              background: rs.borderStrong,
                               color: "#f5e6c8",
                               padding: "11px",
                               cursor: isLoading ? "wait" : "pointer",
@@ -902,7 +889,7 @@ export default function GalleryPage() {
                               fontWeight: "600",
                               letterSpacing: "0.3px",
                               transition: "background 0.2s",
-                              borderRight: `1px solid ${rs.border}35`,
+                              borderRight: `1px solid ${rs.borderFaint}`,
                             }}
                           >
                             {isLoading ? "⏳ Загрузка..." : "✎ Редактировать"}

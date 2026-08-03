@@ -123,6 +123,13 @@ function EditorPageInner() {
             />
             <button
               className="ctrl-btn"
+              id="theme-panel-btn"
+              title="Палитра и оттенки темы"
+            >
+              🎨 Тема
+            </button>
+            <button
+              className="ctrl-btn"
               id="color-reset-btn"
               title="Сбросить цвет"
               style={{ padding: "0 6px", fontSize: "11px" }}
@@ -135,7 +142,7 @@ function EditorPageInner() {
             🖼 Фон
           </button>
           <button className="ctrl-btn" id="add-field-btn">
-            ＋ Поле
+            ＋ Блок
           </button>
           <button className="ctrl-btn" id="add-divider-btn">
             — Разделитель
@@ -208,22 +215,30 @@ function EditorPageInner() {
         style={{ display: "none" }}
       >
         <div className="modal-box">
-          <div className="modal-title">Добавить поле</div>
+          <div className="modal-title">Добавить блок</div>
           <div className="modal-row">
             <label>Название:</label>
             <input
               type="text"
               id="new-field-label"
               placeholder="Оружие, Способности..."
-              maxLength={40}
+              maxLength={60}
             />
           </div>
           <div className="modal-row">
             <label>Тип:</label>
             <select id="new-field-type">
               <option value="input">Строка</option>
-              <option value="textarea">Многострочный</option>
+              <option value="textarea">Многострочный текст</option>
+              <option value="list">Список пунктов</option>
+              <option value="stat">Шкала характеристики</option>
+              <option value="tags">Теги / черты</option>
+              <option value="quote">Цитата</option>
+              <option value="heading">Заголовок раздела</option>
             </select>
+            <span className="modal-hint" id="new-field-hint">
+              Одна строка текста — имя, возраст, титул.
+            </span>
           </div>
           <div className="modal-row">
             <label>Иконка:</label>
@@ -269,6 +284,14 @@ function EditorPageInner() {
               <option value="persona">Характер</option>
               <option value="enemy">Враги</option>
               <option value="goal">Цель</option>
+              <option value="hourglass">Песочные часы</option>
+              <option value="moon">Луна</option>
+              <option value="globe">Мир / глобус</option>
+              <option value="tree">Древо</option>
+              <option value="mask">Маска</option>
+              <option value="quill">Перо</option>
+              <option value="gold">Золото</option>
+              <option value="erythrogen">Эритроген</option>
             </select>
           </div>
           <div className="modal-btns">
@@ -300,7 +323,7 @@ function EditorPageInner() {
         style={{ display: "none" }}
       >
         <div className="modal-box font-modal-box">
-          <div className="modal-title">Настройки шрифтов</div>
+          <div className="modal-title">Шрифты и оформление</div>
           <div className="font-setting-row">
             <label>Имя персонажа</label>
             <div className="font-setting-control">
@@ -406,8 +429,258 @@ function EditorPageInner() {
               </span>
             </div>
           </div>
+          <div className="font-section-title">Гарнитуры</div>
+
+          <div className="font-setting-row">
+            <label>Заголовки и подписи</label>
+            <div className="font-setting-control">
+              <select id="font-display-select" className="font-select" />
+            </div>
+          </div>
+          <div className="font-setting-row">
+            <label>Имя и акценты</label>
+            <div className="font-setting-control">
+              <select id="font-heading-select" className="font-select" />
+            </div>
+          </div>
+          <div className="font-setting-row">
+            <label>Основной текст</label>
+            <div className="font-setting-control">
+              <select id="font-body-select" className="font-select" />
+            </div>
+          </div>
+
+          <div className="font-section-title">Строки и интервалы</div>
+
+          <div className="font-setting-row">
+            <label>Размер «Истории»</label>
+            <div className="font-setting-control">
+              <input
+                type="range"
+                id="history-font-size"
+                min="18"
+                max="72"
+                defaultValue="36"
+              />
+              <span id="history-font-val" className="font-val">
+                36px
+              </span>
+            </div>
+          </div>
+          <div className="font-setting-row">
+            <label>Высота строки «Истории»</label>
+            <div className="font-setting-control">
+              <input
+                type="range"
+                id="history-line-height"
+                min="30"
+                max="110"
+                defaultValue="54"
+              />
+              <span id="history-line-val" className="font-val">
+                54px
+              </span>
+            </div>
+          </div>
+          <div className="font-setting-row">
+            <label>Интерлиньяж полей</label>
+            <div className="font-setting-control">
+              <input
+                type="range"
+                id="input-line-height"
+                min="100"
+                max="220"
+                defaultValue="140"
+              />
+              <span id="input-line-val" className="font-val">
+                1.40
+              </span>
+            </div>
+          </div>
+          <div className="font-setting-row">
+            <label>Разрядка подписей</label>
+            <div className="font-setting-control">
+              <input
+                type="range"
+                id="label-letter-spacing"
+                min="0"
+                max="14"
+                defaultValue="4"
+              />
+              <span id="label-spacing-val" className="font-val">
+                4px
+              </span>
+            </div>
+          </div>
+          <div className="font-setting-row">
+            <label>Разрядка имени</label>
+            <div className="font-setting-control">
+              <input
+                type="range"
+                id="name-letter-spacing"
+                min="0"
+                max="24"
+                defaultValue="6"
+              />
+              <span id="name-spacing-val" className="font-val">
+                6px
+              </span>
+            </div>
+          </div>
+          <div className="font-setting-row">
+            <label>Отступы строк</label>
+            <div className="font-setting-control">
+              <input
+                type="range"
+                id="field-row-padding"
+                min="6"
+                max="60"
+                defaultValue="22"
+              />
+              <span id="field-padding-val" className="font-val">
+                22px
+              </span>
+            </div>
+          </div>
+          <div className="font-setting-row">
+            <label>Разлиновка «Истории»</label>
+            <div className="font-setting-control">
+              <input
+                type="range"
+                id="history-rule-opacity"
+                min="0"
+                max="100"
+                defaultValue="100"
+              />
+              <span id="history-rule-val" className="font-val">
+                100%
+              </span>
+            </div>
+          </div>
+
+          <div className="font-section-title">Разметка текста</div>
+
+          <div className="font-setting-row">
+            <label htmlFor="markdown-toggle">Markdown в многострочных</label>
+            <div className="font-setting-control">
+              <label className="theme-toggle" htmlFor="markdown-toggle">
+                <input type="checkbox" id="markdown-toggle" defaultChecked />
+                Включить
+              </label>
+            </div>
+          </div>
+          <div className="md-help" id="md-help" />
+
           <div className="modal-btns">
+            <button id="font-reset">Сбросить</button>
             <button id="font-modal-close">Закрыть</button>
+          </div>
+        </div>
+      </div>
+
+      {/* ======== МОДАЛКА: ТЕМА / ЦВЕТ ======== */}
+      <div
+        id="theme-modal"
+        className="modal-overlay"
+        style={{ display: "none" }}
+      >
+        <div className="modal-box theme-modal-box">
+          <div className="modal-title">Тема анкеты</div>
+
+          <div className="theme-preview" id="theme-preview">
+            <span className="theme-preview-label" id="theme-preview-label">
+              Досье
+            </span>
+          </div>
+
+          <div className="theme-row">
+            <label htmlFor="theme-hue-slider">Оттенок</label>
+            <input
+              type="range"
+              id="theme-hue-slider"
+              min="0"
+              max="360"
+              step="1"
+              defaultValue="30"
+            />
+            <span className="theme-val" id="theme-hue-val">
+              30°
+            </span>
+          </div>
+
+          <div className="theme-row">
+            <label htmlFor="theme-sat-slider">Насыщенность</label>
+            <input
+              type="range"
+              id="theme-sat-slider"
+              min="0"
+              max="100"
+              step="1"
+              defaultValue="45"
+            />
+            <span className="theme-val" id="theme-sat-val">
+              45%
+            </span>
+          </div>
+
+          <div className="theme-row">
+            <label htmlFor="theme-light-slider">Светлота</label>
+            <input
+              type="range"
+              id="theme-light-slider"
+              min="0"
+              max="100"
+              step="1"
+              defaultValue="18"
+            />
+            <span className="theme-val" id="theme-light-val">
+              18%
+            </span>
+          </div>
+
+          <div className="theme-row">
+            <label htmlFor="theme-opacity-slider">Плотность</label>
+            <input
+              type="range"
+              id="theme-opacity-slider"
+              min="30"
+              max="100"
+              step="1"
+              defaultValue="94"
+            />
+            <span className="theme-val" id="theme-opacity-val">
+              94%
+            </span>
+          </div>
+
+          <div className="theme-row">
+            <label>Точный цвет</label>
+            <input
+              type="color"
+              id="theme-color-input"
+              className="theme-color-input"
+              defaultValue="#2a1f14"
+            />
+            <input
+              type="text"
+              id="theme-hex-input"
+              className="theme-hex-input"
+              maxLength={7}
+              spellCheck={false}
+              placeholder="#2A1F14"
+            />
+            <label className="theme-toggle" htmlFor="theme-gradient-toggle">
+              <input type="checkbox" id="theme-gradient-toggle" defaultChecked />
+              Градиент
+            </label>
+          </div>
+
+          <div className="theme-presets-title">Готовые оттенки</div>
+          <div className="theme-presets" id="theme-presets" />
+
+          <div className="modal-btns">
+            <button id="theme-reset">Сбросить</button>
+            <button id="theme-apply">Готово</button>
           </div>
         </div>
       </div>
@@ -1177,6 +1450,7 @@ function EditorPageInner() {
                     ✕
                   </div>
                   <div className="history-header">
+                    <div className="field-icon-wrap" data-icon="scroll" />
                     <svg
                       width="100%"
                       height="48"
