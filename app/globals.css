@@ -865,6 +865,82 @@ body {
   border-radius: 3px;
 }
 
+/* Панель быстрого форматирования */
+.md-toolbar {
+  position: absolute;
+  top: -42px;
+  left: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 6px;
+  background: rgba(245, 228, 185, 0.95);
+  border: 1px solid rgba(122, 74, 26, 0.4);
+  border-radius: 4px;
+  box-shadow: 0 3px 10px rgba(42, 18, 6, 0.25);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.14s;
+}
+
+.md-host:focus-within .md-toolbar,
+.md-toolbar:hover {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.md-tool {
+  min-width: 30px;
+  height: 28px;
+  padding: 0 7px;
+  font-family: "Cormorant Garamond", serif;
+  font-size: 16px;
+  line-height: 1;
+  color: #3b1f0a;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.md-tool:hover {
+  background: rgba(196, 144, 80, 0.45);
+  border-color: rgba(122, 74, 26, 0.45);
+}
+
+.md-tool-sep {
+  width: 1px;
+  height: 18px;
+  background: rgba(122, 74, 26, 0.3);
+  margin: 0 3px;
+}
+
+/* Счётчик символов */
+.md-counter {
+  position: absolute;
+  right: 0;
+  bottom: -22px;
+  font-family: "Philosopher", serif;
+  font-size: 13px;
+  color: #7a4a1a;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.14s;
+  white-space: nowrap;
+}
+
+.md-host:focus-within .md-counter { opacity: 0.65; }
+
+/* Поле в фокусе слегка подсвечивается — видно, что редактируешь */
+.md-host:focus-within .history-textarea,
+.md-host:focus-within .custom-field-textarea {
+  background-color: rgba(255, 250, 235, 0.35);
+  box-shadow: 0 0 0 2px rgba(196, 144, 80, 0.35);
+  border-radius: 3px;
+}
+
 /* Кнопка-переключатель «разметка / исходник» */
 .md-toggle {
   position: absolute;
@@ -917,6 +993,18 @@ body {
 }
 
 .md-help span { opacity: 0.75; }
+
+.md-help-sep {
+  grid-column: 1 / -1;
+  margin: 8px 0 2px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(122, 74, 26, 0.25);
+  font-family: "Uncial Antiqua", serif;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
 
 /* ============================================================
    ПОЛЬЗОВАТЕЛЬСКИЕ БЛОКИ
@@ -2365,6 +2453,14 @@ body {
 .custom-theme .md-view .md-quote { border-left-color: var(--theme-border-color) !important; }
 .custom-theme .md-view .md-hr { border-top-color: var(--theme-divider-stroke) !important; }
 .custom-theme .md-view .md-code { background: var(--theme-rank-bg) !important; }
+.custom-theme .md-toolbar {
+  background: var(--theme-rank-bg) !important;
+  border-color: var(--theme-input-border) !important;
+}
+.custom-theme .md-tool { color: var(--theme-input-color) !important; }
+.custom-theme .md-tool-sep { background: var(--theme-input-border) !important; }
+.custom-theme .md-counter { color: var(--theme-label-color) !important; }
+
 .custom-theme .md-toggle {
   color: var(--theme-label-color) !important;
   background: var(--theme-rank-bg) !important;

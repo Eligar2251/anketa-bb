@@ -11,6 +11,7 @@ import {
   renderMarkdown,
   styleMarkdownForExport,
   MD_CHEATSHEET,
+  EDITOR_SHORTCUTS,
 } from "../lib/markdown";
 import {
   generateThemeFromColor,
@@ -463,6 +464,7 @@ export function initApp() {
   initRoleBadgeEditor();
   initAutoGrowTextareas();
   initKeyboardShortcuts();
+  initFieldNavigation();
   initMarkdown();
 
   restoreAll();
@@ -872,13 +874,20 @@ function initMarkdownToggle() {
 function initMarkdownHelp() {
   const box = $("md-help");
   if (!box || box.childElementCount) return;
-  MD_CHEATSHEET.forEach(([syntax, meaning]) => {
+  const add = (syntax, meaning) => {
     const c = document.createElement("code");
     c.textContent = syntax;
     const d = document.createElement("span");
     d.textContent = meaning;
     box.append(c, d);
-  });
+  };
+  MD_CHEATSHEET.forEach(([a, b]) => add(a, b));
+
+  const hr = document.createElement("div");
+  hr.className = "md-help-sep";
+  hr.textContent = "Горячие клавиши";
+  box.appendChild(hr);
+  EDITOR_SHORTCUTS.forEach(([a, b]) => add(a, b));
 }
 
 /** Сброс всей типографики к значениям по умолчанию. */
@@ -3410,16 +3419,66 @@ function makeDiv(t, css) {
   return d;
 }
 let _savedCS = [];
+
+/**
+ * Раскладывает рамку портрета в абсолютные координаты.
+ *
+ * БАГ, который это чинит: в PNG оставался только левый верхний
+ * уголок. Остальные три позиционировались через right/bottom,
+ * а html2canvas такие смещения на вложенных абсолютных элементах
+ * разрешает неверно и уводит их за пределы кадра. Здесь считаем
+ * фактический размер области портрета и задаём всем элементам
+ * рамки явные top/left в пикселях.
+ */
 function fixFrameCornersForExport() {
   _savedCS = [];
-  sheet
-    .querySelector("#portrait-area")
-    ?.querySelectorAll(".frame-corner")
-    .forEach((c) => {
-      _savedCS.push({ el: c, prev: c.style.cssText });
-      c.style.cssText = `position:absolute;width:80px;height:80px;display:block;overflow:visible;${c.classList.contains("frame-tl") ? "top:-2px;left:-2px;" : ""}${c.classList.contains("frame-tr") ? "top:-2px;right:-2px;" : ""}${c.classList.contains("frame-bl") ? "bottom:-2px;left:-2px;" : ""}${c.classList.contains("frame-br") ? "bottom:-2px;right:-2px;" : ""}`;
-    });
+  const area = sheet.querySelector("#portrait-area");
+  if (!area) return;
+
+  // Размеры берём из состояния: getBoundingClientRect вернул бы
+  // размер с учётом текущего масштаба листа.
+  const w = area.offsetWidth || S.portW;
+  const h = area.offsetHeight || S.portH;
+  const C = 80; // сторона уголка
+  const OFF = -2; // выступ за границу, как в CSS
+  const LINE = 3; // толщина линии рамки
+  const GAP = 78; // отступ линии от угла
+
+  const put = (el, css) => {
+    _savedCS.push({ el, prev: el.style.cssText });
+    el.style.cssText = css;
+  };
+
+  area.querySelectorAll(".frame-corner").forEach((c) => {
+    const cl = c.classList;
+    const top = cl.contains("frame-tl") || cl.contains("frame-tr") ? OFF : h - C - OFF;
+    const left = cl.contains("frame-tl") || cl.contains("frame-bl") ? OFF : w - C - OFF;
+    put(
+      c,
+      `position:absolute;top:${top}px;left:${left}px;` +
+        `width:${C}px;height:${C}px;display:block;overflow:visible;z-index:6;`,
+    );
+  });
+
+  // Линии рамки страдают от той же проблемы с right/bottom
+  area.querySelectorAll(".frame-line").forEach((l) => {
+    const cl = l.classList;
+    let css = "position:absolute;display:block;z-index:5;";
+    if (cl.contains("frame-top"))
+      css += `top:0;left:${GAP}px;width:${Math.max(0, w - GAP * 2)}px;height:${LINE}px;`;
+    else if (cl.contains("frame-bottom"))
+      css += `top:${h - LINE}px;left:${GAP}px;width:${Math.max(0, w - GAP * 2)}px;height:${LINE}px;`;
+    else if (cl.contains("frame-left"))
+      css += `left:0;top:${GAP}px;height:${Math.max(0, h - GAP * 2)}px;width:${LINE}px;`;
+    else if (cl.contains("frame-right"))
+      css += `left:${w - LINE}px;top:${GAP}px;height:${Math.max(0, h - GAP * 2)}px;width:${LINE}px;`;
+    // Цвет линии задан фоном — сохраняем текущий вычисленный
+    const bg = getComputedStyle(l).backgroundColor;
+    if (bg) css += `background:${bg};`;
+    put(l, css);
+  });
 }
+
 function restoreFrameCorners() {
   _savedCS.forEach(({ el, prev }) => (el.style.cssText = prev));
   _savedCS = [];
@@ -3926,6 +3985,190 @@ function refreshAllMarkdown() {
 }
 
 /** Оборачивает textarea в контейнер с предпросмотром. */
+// ============================================================
+// РЕДАКТИРОВАНИЕ ТЕКСТА: панель, горячие клавиши, умный ввод
+// ============================================================
+
+/**
+ * Вставка с сохранением истории отмены.
+ * execCommand устарел, но это единственный способ, при котором
+ * Ctrl+Z продолжает работать в textarea.
+ */
+function insertText(ta, text) {
+  ta.focus();
+  let ok = false;
+  try {
+    ok = document.execCommand("insertText", false, text);
+  } catch {}
+  if (!ok) {
+    const { selectionStart: a, selectionEnd: b } = ta;
+    ta.value = ta.value.slice(0, a) + text + ta.value.slice(b);
+    ta.setSelectionRange(a + text.length, a + text.length);
+  }
+  ta.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+/** Оборачивает выделение парой меток; повторный вызов снимает их. */
+function wrapSelection(ta, before, after = before, placeholder = "текст") {
+  const a = ta.selectionStart;
+  const b = ta.selectionEnd;
+  const sel = ta.value.slice(a, b);
+
+  // Уже обёрнуто — разворачиваем
+  const outer = ta.value.slice(a - before.length, b + after.length);
+  if (
+    sel &&
+    outer === before + sel + after &&
+    a >= before.length
+  ) {
+    ta.setSelectionRange(a - before.length, b + after.length);
+    insertText(ta, sel);
+    ta.setSelectionRange(a - before.length, b - before.length);
+    return;
+  }
+
+  const body = sel || placeholder;
+  insertText(ta, before + body + after);
+  if (sel) ta.setSelectionRange(a + before.length, a + before.length + body.length);
+  else
+    ta.setSelectionRange(
+      a + before.length,
+      a + before.length + placeholder.length,
+    );
+}
+
+/** Ставит/снимает префикс у всех строк выделения (списки, цитаты, заголовки). */
+function toggleLinePrefix(ta, prefix, { numbered = false } = {}) {
+  const value = ta.value;
+  const a = ta.selectionStart;
+  const b = ta.selectionEnd;
+  const from = value.lastIndexOf("\n", a - 1) + 1;
+  let to = value.indexOf("\n", b);
+  if (to === -1) to = value.length;
+
+  const block = value.slice(from, to);
+  const lines = block.split("\n");
+  const re = numbered ? /^\s*\d+[.)]\s+/ : new RegExp("^\\s*" + prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const allHave = lines.every((l) => !l.trim() || re.test(l));
+
+  const next = lines
+    .map((l, i) => {
+      if (!l.trim()) return l;
+      if (allHave) return l.replace(re, "");
+      return (numbered ? `${i + 1}. ` : prefix) + l.replace(re, "");
+    })
+    .join("\n");
+
+  ta.setSelectionRange(from, to);
+  insertText(ta, next);
+  ta.setSelectionRange(from, from + next.length);
+}
+
+/** Кнопки быстрого форматирования над полем. */
+const MD_TOOLS = [
+  { label: "Ж", title: "Жирный (Ctrl+B)", style: "font-weight:700", run: (ta) => wrapSelection(ta, "**") },
+  { label: "К", title: "Курсив (Ctrl+I)", style: "font-style:italic", run: (ta) => wrapSelection(ta, "*") },
+  { label: "З", title: "Зачёркнутый", style: "text-decoration:line-through", run: (ta) => wrapSelection(ta, "~~") },
+  { sep: true },
+  { label: "H", title: "Заголовок", run: (ta) => toggleLinePrefix(ta, "## ") },
+  { label: "•", title: "Маркированный список", run: (ta) => toggleLinePrefix(ta, "- ") },
+  { label: "1.", title: "Нумерованный список", run: (ta) => toggleLinePrefix(ta, "1. ", { numbered: true }) },
+  { label: "❝", title: "Цитата", run: (ta) => toggleLinePrefix(ta, "> ") },
+  { sep: true },
+  { label: "—", title: "Разделитель", run: (ta) => insertText(ta, "\n---\n") },
+];
+
+function buildMarkdownToolbar(ta, host) {
+  const bar = document.createElement("div");
+  bar.className = "md-toolbar ui-only";
+
+  MD_TOOLS.forEach((tool) => {
+    if (tool.sep) {
+      const sp = document.createElement("span");
+      sp.className = "md-tool-sep";
+      bar.appendChild(sp);
+      return;
+    }
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "md-tool";
+    b.title = tool.title;
+    b.textContent = tool.label;
+    if (tool.style) b.style.cssText = tool.style;
+    // mousedown, а не click: не даём полю потерять фокус
+    b.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      host.dataset.editing = "1";
+      refreshMarkdown(ta);
+      tool.run(ta);
+      autoGrow(ta);
+      saveTempStateSoon();
+    });
+    bar.appendChild(b);
+  });
+
+  host.appendChild(bar);
+  return bar;
+}
+
+/** Горячие клавиши и умное поведение Enter/Tab внутри поля. */
+function bindEditorKeys(ta) {
+  ta.addEventListener("keydown", (e) => {
+    const mod = e.ctrlKey || e.metaKey;
+
+    if (mod && !e.altKey) {
+      const k = e.key.toLowerCase();
+      if (k === "b") { e.preventDefault(); wrapSelection(ta, "**"); return; }
+      if (k === "i") { e.preventDefault(); wrapSelection(ta, "*"); return; }
+    }
+
+    // Tab — отступ, Shift+Tab — снять. Без этого Tab уводит фокус.
+    if (e.key === "Tab") {
+      e.preventDefault();
+      if (e.shiftKey) {
+        const from = ta.value.lastIndexOf("\n", ta.selectionStart - 1) + 1;
+        if (/^ {1,2}/.test(ta.value.slice(from))) {
+          const cut = ta.value.slice(from).match(/^ {1,2}/)[0].length;
+          const pos = ta.selectionStart;
+          ta.setSelectionRange(from, from + cut);
+          insertText(ta, "");
+          ta.setSelectionRange(Math.max(from, pos - cut), Math.max(from, pos - cut));
+        }
+      } else {
+        insertText(ta, "  ");
+      }
+      autoGrow(ta);
+      return;
+    }
+
+    // Enter продолжает список / цитату
+    if (e.key === "Enter" && !e.shiftKey && !mod) {
+      const from = ta.value.lastIndexOf("\n", ta.selectionStart - 1) + 1;
+      const line = ta.value.slice(from, ta.selectionStart);
+      const m = line.match(/^(\s*)(?:([-*+])\s+|(\d+)([.)])\s+|(>)\s?)/);
+      if (!m) return;
+
+      const rest = line.slice(m[0].length);
+      // Пустой пункт — выходим из списка
+      if (!rest.trim()) {
+        e.preventDefault();
+        ta.setSelectionRange(from, ta.selectionStart);
+        insertText(ta, "");
+        autoGrow(ta);
+        return;
+      }
+      e.preventDefault();
+      let prefix;
+      if (m[2]) prefix = `${m[1]}${m[2]} `;
+      else if (m[3]) prefix = `${m[1]}${Number(m[3]) + 1}${m[4]} `;
+      else prefix = `${m[1]}> `;
+      insertText(ta, "\n" + prefix);
+      autoGrow(ta);
+    }
+  });
+}
+
 function attachMarkdown(ta) {
   if (!ta || ta.dataset.mdReady === "1") return;
   ta.dataset.mdReady = "1";
@@ -3945,6 +4188,21 @@ function attachMarkdown(ta) {
   toggle.title = "Показать исходный текст с разметкой";
   toggle.textContent = "✎ разметка";
   host.appendChild(toggle);
+
+  buildMarkdownToolbar(ta, host);
+  bindEditorKeys(ta);
+
+  // Счётчик символов — виден только при правке
+  const counter = document.createElement("span");
+  counter.className = "md-counter ui-only";
+  host.appendChild(counter);
+  const updCounter = () => {
+    const n = ta.value.length;
+    const words = ta.value.trim() ? ta.value.trim().split(/\s+/).length : 0;
+    counter.textContent = `${words} сл. · ${n} симв.`;
+  };
+  ta.addEventListener("input", updCounter);
+  updCounter();
 
   // Клик по предпросмотру — переходим к редактированию
   view.addEventListener("mousedown", (e) => {
@@ -3999,6 +4257,47 @@ function attachMarkdown(ta) {
 function initMarkdown() {
   markdownTargets().forEach(attachMarkdown);
   refreshAllMarkdown();
+}
+
+/**
+ * Навигация между полями с клавиатуры.
+ * Раньше Enter в однострочном поле не делал ничего, а перейти
+ * к следующему можно было только мышью или Tab через все кнопки.
+ */
+function initFieldNavigation() {
+  const focusables = () =>
+    Array.from(
+      sheet.querySelectorAll(
+        'input.field-input, input.list-item-input, textarea.history-textarea, textarea.custom-field-textarea, input.heading-input, textarea.quote-text, input.quote-author, input.ery-number-input',
+      ),
+    ).filter((el) => el.offsetParent !== null || el.style.display !== "none");
+
+  on(sheet, "keydown", (e) => {
+    const el = e.target;
+    if (!(el instanceof HTMLInputElement)) return;
+    if (!el.matches("input.field-input, input.list-item-input")) return;
+
+    // Enter / стрелки вверх-вниз переводят на соседнее поле
+    const down = e.key === "Enter" || e.key === "ArrowDown";
+    const up = e.key === "ArrowUp";
+    if (!down && !up) return;
+    // В пунктах списка Enter уже создаёт новый пункт
+    if (e.key === "Enter" && el.matches(".list-item-input")) return;
+
+    const list = focusables();
+    const i = list.indexOf(el);
+    if (i === -1) return;
+    const next = list[i + (down ? 1 : -1)];
+    if (!next) return;
+    e.preventDefault();
+    next.focus();
+    if (next.setSelectionRange && next.type !== "number") {
+      const len = next.value.length;
+      try {
+        next.setSelectionRange(len, len);
+      } catch {}
+    }
+  });
 }
 
 function initAutoGrowTextareas() {
