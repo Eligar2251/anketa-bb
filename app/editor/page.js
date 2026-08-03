@@ -323,7 +323,7 @@ function EditorPageInner() {
         style={{ display: "none" }}
       >
         <div className="modal-box font-modal-box">
-          <div className="modal-title">Настройки шрифтов</div>
+          <div className="modal-title">Шрифты и оформление</div>
           <div className="font-setting-row">
             <label>Имя персонажа</label>
             <div className="font-setting-control">
@@ -429,7 +429,150 @@ function EditorPageInner() {
               </span>
             </div>
           </div>
+          <div className="font-section-title">Гарнитуры</div>
+
+          <div className="font-setting-row">
+            <label>Заголовки и подписи</label>
+            <div className="font-setting-control">
+              <select id="font-display-select" className="font-select" />
+            </div>
+          </div>
+          <div className="font-setting-row">
+            <label>Имя и акценты</label>
+            <div className="font-setting-control">
+              <select id="font-heading-select" className="font-select" />
+            </div>
+          </div>
+          <div className="font-setting-row">
+            <label>Основной текст</label>
+            <div className="font-setting-control">
+              <select id="font-body-select" className="font-select" />
+            </div>
+          </div>
+
+          <div className="font-section-title">Строки и интервалы</div>
+
+          <div className="font-setting-row">
+            <label>Размер «Истории»</label>
+            <div className="font-setting-control">
+              <input
+                type="range"
+                id="history-font-size"
+                min="18"
+                max="72"
+                defaultValue="36"
+              />
+              <span id="history-font-val" className="font-val">
+                36px
+              </span>
+            </div>
+          </div>
+          <div className="font-setting-row">
+            <label>Высота строки «Истории»</label>
+            <div className="font-setting-control">
+              <input
+                type="range"
+                id="history-line-height"
+                min="30"
+                max="110"
+                defaultValue="54"
+              />
+              <span id="history-line-val" className="font-val">
+                54px
+              </span>
+            </div>
+          </div>
+          <div className="font-setting-row">
+            <label>Интерлиньяж полей</label>
+            <div className="font-setting-control">
+              <input
+                type="range"
+                id="input-line-height"
+                min="100"
+                max="220"
+                defaultValue="140"
+              />
+              <span id="input-line-val" className="font-val">
+                1.40
+              </span>
+            </div>
+          </div>
+          <div className="font-setting-row">
+            <label>Разрядка подписей</label>
+            <div className="font-setting-control">
+              <input
+                type="range"
+                id="label-letter-spacing"
+                min="0"
+                max="14"
+                defaultValue="4"
+              />
+              <span id="label-spacing-val" className="font-val">
+                4px
+              </span>
+            </div>
+          </div>
+          <div className="font-setting-row">
+            <label>Разрядка имени</label>
+            <div className="font-setting-control">
+              <input
+                type="range"
+                id="name-letter-spacing"
+                min="0"
+                max="24"
+                defaultValue="6"
+              />
+              <span id="name-spacing-val" className="font-val">
+                6px
+              </span>
+            </div>
+          </div>
+          <div className="font-setting-row">
+            <label>Отступы строк</label>
+            <div className="font-setting-control">
+              <input
+                type="range"
+                id="field-row-padding"
+                min="6"
+                max="60"
+                defaultValue="22"
+              />
+              <span id="field-padding-val" className="font-val">
+                22px
+              </span>
+            </div>
+          </div>
+          <div className="font-setting-row">
+            <label>Разлиновка «Истории»</label>
+            <div className="font-setting-control">
+              <input
+                type="range"
+                id="history-rule-opacity"
+                min="0"
+                max="100"
+                defaultValue="100"
+              />
+              <span id="history-rule-val" className="font-val">
+                100%
+              </span>
+            </div>
+          </div>
+
+          <div className="font-section-title">Разметка текста</div>
+
+          <div className="font-setting-row">
+            <label htmlFor="markdown-toggle">Markdown в многострочных</label>
+            <div className="font-setting-control">
+              <label className="theme-toggle" htmlFor="markdown-toggle">
+                <input type="checkbox" id="markdown-toggle" defaultChecked />
+                Включить
+              </label>
+            </div>
+          </div>
+          <div className="md-help" id="md-help" />
+
           <div className="modal-btns">
+            <button id="font-reset">Сбросить</button>
             <button id="font-modal-close">Закрыть</button>
           </div>
         </div>
@@ -1307,6 +1450,7 @@ function EditorPageInner() {
                     ✕
                   </div>
                   <div className="history-header">
+                    <div className="field-icon-wrap" data-icon="scroll" />
                     <svg
                       width="100%"
                       height="48"

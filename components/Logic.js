@@ -8,6 +8,11 @@ import {
   deleteImageFromCloudinary,
 } from "../lib/cloudinary";
 import {
+  renderMarkdown,
+  styleMarkdownForExport,
+  MD_CHEATSHEET,
+} from "../lib/markdown";
+import {
   generateThemeFromColor,
   applyThemeToElement,
   clearThemeFromElement,
@@ -125,6 +130,8 @@ let _addFieldInitialized = false;
 let _dividerInitialized = false;
 let _themeInitialized = false;
 let _shortcutsInitialized = false;
+/** Функции синхронизации ползунков типографики с состоянием. */
+const _sliders = [];
 let _resetting = false;
 
 const ROLE_DISPLAY_NAMES = {
@@ -248,7 +255,37 @@ const S = {
   // Настройки темы
   themeGradient: true,
   themeOpacity: 0.94,
+  // Оформление текста
+  fontDisplay: "uncial",
+  fontHeading: "cormorant",
+  fontBody: "philosopher",
+  inputLineHeight: 1.4,
+  historyLineHeight: 54,
+  historyFontSize: 36,
+  labelLetterSpacing: 4,
+  nameLetterSpacing: 6,
+  historyRuleOpacity: 1,
+  fieldRowPadding: 22,
+  markdownEnabled: true,
 };
+
+/** Наборы шрифтов, доступные в настройках. */
+const FONT_SETS = {
+  uncial: { name: "Uncial Antiqua", css: '"Uncial Antiqua", "Cormorant Garamond", serif' },
+  cinzel: { name: "Cinzel", css: '"Cinzel", "Cormorant Garamond", serif' },
+  medieval: { name: "MedievalSharp", css: '"MedievalSharp", "Cormorant Garamond", serif' },
+  imfell: { name: "IM Fell English", css: '"IM Fell English", "EB Garamond", serif' },
+  cormorant: { name: "Cormorant Garamond", css: '"Cormorant Garamond", serif' },
+  garamond: { name: "EB Garamond", css: '"EB Garamond", "Cormorant Garamond", serif' },
+  philosopher: { name: "Philosopher", css: '"Philosopher", serif' },
+  caveat: { name: "Caveat (рукопись)", css: '"Caveat", "Philosopher", cursive' },
+  marck: { name: "Marck Script (пропись)", css: '"Marck Script", "Philosopher", cursive' },
+  jost: { name: "Jost (без засечек)", css: '"Jost", system-ui, sans-serif' },
+};
+
+function fontCss(key, fallback) {
+  return (FONT_SETS[key] || FONT_SETS[fallback])?.css || FONT_SETS[fallback].css;
+}
 
 const $ = (id) => document.getElementById(id);
 
@@ -426,6 +463,7 @@ export function initApp() {
   initRoleBadgeEditor();
   initAutoGrowTextareas();
   initKeyboardShortcuts();
+  initMarkdown();
 
   restoreAll();
   // Применяем dual mode после восстановления всех данных
@@ -463,6 +501,7 @@ export function resetAppInit() {
 
   _themeInitialized = false;
   _shortcutsInitialized = false;
+  _sliders.length = 0;
 
   if (S.autoSaveTimer) {
     clearInterval(S.autoSaveTimer);
@@ -591,6 +630,17 @@ function collectState() {
     eryHintVisible2: S.eryHintVisible2,
     themeGradient: S.themeGradient,
     themeOpacity: S.themeOpacity,
+    fontDisplay: S.fontDisplay,
+    fontHeading: S.fontHeading,
+    fontBody: S.fontBody,
+    inputLineHeight: S.inputLineHeight,
+    historyLineHeight: S.historyLineHeight,
+    historyFontSize: S.historyFontSize,
+    labelLetterSpacing: S.labelLetterSpacing,
+    nameLetterSpacing: S.nameLetterSpacing,
+    historyRuleOpacity: S.historyRuleOpacity,
+    fieldRowPadding: S.fieldRowPadding,
+    markdownEnabled: S.markdownEnabled,
     dualMode: S.dualMode,
     currentCharacterId: S.currentCharacterId,
     roleBadgeCustomText: S.roleBadgeCustomText,
@@ -741,23 +791,174 @@ function initFontSizeControls() {
     "roleBadgeFontSize",
     updateRoleBadge,
   );
+  setupSlider("history-font-size", "history-font-val", "historyFontSize");
+  setupSlider("history-line-height", "history-line-val", "historyLineHeight");
+  setupSlider(
+    "label-letter-spacing",
+    "label-spacing-val",
+    "labelLetterSpacing",
+  );
+  setupSlider("name-letter-spacing", "name-spacing-val", "nameLetterSpacing");
+  setupSlider("field-row-padding", "field-padding-val", "fieldRowPadding");
+
+  // Интерлиньяж хранится долей, а ползунок в процентах
+  setupSlider("input-line-height", "input-line-val", "inputLineHeight", null, {
+    toState: (v) => v / 100,
+    toSlider: (v) => Math.round(v * 100),
+    format: (v) => (v / 100).toFixed(2),
+  });
+
+  // Плотность разлиновки — 0…100 % → 0…1
+  setupSlider(
+    "history-rule-opacity",
+    "history-rule-val",
+    "historyRuleOpacity",
+    null,
+    {
+      toState: (v) => v / 100,
+      toSlider: (v) => Math.round(v * 100),
+      format: (v) => v + "%",
+    },
+  );
+
+  initFontSelects();
+  initMarkdownToggle();
+  initMarkdownHelp();
+
+  on($("font-reset"), "click", resetTypography);
 }
 
-function setupSlider(sliderId, valId, stateKey, extraCb) {
+/** Выпадающие списки гарнитур. */
+function initFontSelects() {
+  const defs = [
+    ["font-display-select", "fontDisplay"],
+    ["font-heading-select", "fontHeading"],
+    ["font-body-select", "fontBody"],
+  ];
+  for (const [id, key] of defs) {
+    const sel = $(id);
+    if (!sel) continue;
+    if (!sel.childElementCount) {
+      Object.entries(FONT_SETS).forEach(([k, f]) => {
+        const o = document.createElement("option");
+        o.value = k;
+        o.textContent = f.name;
+        o.style.fontFamily = f.css;
+        sel.appendChild(o);
+      });
+    }
+    sel.value = S[key];
+    sel.style.fontFamily = fontCss(S[key], "philosopher");
+    on(sel, "change", () => {
+      S[key] = sel.value;
+      sel.style.fontFamily = fontCss(sel.value, "philosopher");
+      applyFontSizes();
+      saveTempStateSoon(0);
+    });
+  }
+}
+
+function initMarkdownToggle() {
+  const cb = $("markdown-toggle");
+  if (!cb) return;
+  cb.checked = !!S.markdownEnabled;
+  on(cb, "change", () => {
+    S.markdownEnabled = !!cb.checked;
+    refreshAllMarkdown();
+    saveTempStateSoon(0);
+  });
+}
+
+function initMarkdownHelp() {
+  const box = $("md-help");
+  if (!box || box.childElementCount) return;
+  MD_CHEATSHEET.forEach(([syntax, meaning]) => {
+    const c = document.createElement("code");
+    c.textContent = syntax;
+    const d = document.createElement("span");
+    d.textContent = meaning;
+    box.append(c, d);
+  });
+}
+
+/** Сброс всей типографики к значениям по умолчанию. */
+function resetTypography() {
+  Object.assign(S, {
+    nameFontSize: 80,
+    labelFontSize: 26,
+    inputFontSize: 42,
+    eryFontSize: 64,
+    rankNameFontSize: 32,
+    rankRangeFontSize: 26,
+    roleBadgeFontSize: 24,
+    historyFontSize: 36,
+    historyLineHeight: 54,
+    inputLineHeight: 1.4,
+    labelLetterSpacing: 4,
+    nameLetterSpacing: 6,
+    fieldRowPadding: 22,
+    historyRuleOpacity: 1,
+    fontDisplay: "uncial",
+    fontHeading: "cormorant",
+    fontBody: "philosopher",
+  });
+  syncTypographyControls();
+  applyFontSizes();
+  updateRoleBadge();
+  saveTempState();
+  showToast("Оформление сброшено");
+}
+
+/** Подтягивает все контролы модалки под текущее состояние. */
+function syncTypographyControls() {
+  _sliders.forEach((fn) => fn());
+  [
+    ["font-display-select", "fontDisplay"],
+    ["font-heading-select", "fontHeading"],
+    ["font-body-select", "fontBody"],
+  ].forEach(([id, key]) => {
+    const sel = $(id);
+    if (sel) {
+      sel.value = S[key];
+      sel.style.fontFamily = fontCss(S[key], "philosopher");
+    }
+  });
+  const cb = $("markdown-toggle");
+  if (cb) cb.checked = !!S.markdownEnabled;
+}
+
+/**
+ * @param {object} [conv] Преобразование ползунок↔состояние.
+ *   toState(sliderValue) → значение в S
+ *   toSlider(stateValue) → положение ползунка
+ *   format(sliderValue)  → подпись
+ */
+function setupSlider(sliderId, valId, stateKey, extraCb, conv) {
   const slider = $(sliderId);
   const valEl = $(valId);
   if (!slider) return;
 
-  // Синхронизируем ползунок с состоянием, но в пределах min/max разметки
   const min = parseInt(slider.min, 10) || 0;
   const max = parseInt(slider.max, 10) || 999;
-  S[stateKey] = clamp(Number(S[stateKey]) || min, min, max);
-  slider.value = S[stateKey];
-  if (valEl) valEl.textContent = S[stateKey] + "px";
+  const toState = conv?.toState || ((v) => v);
+  const toSlider = conv?.toSlider || ((v) => v);
+  const format = conv?.format || ((v) => v + "px");
+
+  const sync = () => {
+    const pos = clamp(Math.round(toSlider(Number(S[stateKey]))), min, max);
+    slider.value = pos;
+    if (valEl) valEl.textContent = format(pos);
+  };
+
+  // Приводим состояние в допустимый диапазон разметки
+  S[stateKey] = toState(clamp(Math.round(toSlider(Number(S[stateKey]) || 0)), min, max));
+  sync();
+  _sliders.push(sync);
 
   on(slider, "input", () => {
-    S[stateKey] = clamp(parseInt(slider.value, 10), min, max);
-    if (valEl) valEl.textContent = S[stateKey] + "px";
+    const pos = clamp(parseInt(slider.value, 10), min, max);
+    S[stateKey] = toState(pos);
+    if (valEl) valEl.textContent = format(pos);
     applyFontSizes();
     extraCb?.();
     saveTempStateSoon();
@@ -767,6 +968,7 @@ function setupSlider(sliderId, valId, stateKey, extraCb) {
 function applyFontSizes() {
   scheduleFrame("fonts", () => {
     const r = document.documentElement;
+    // Кегли
     r.style.setProperty("--name-font-size", S.nameFontSize + "px");
     r.style.setProperty("--label-font-size", S.labelFontSize + "px");
     r.style.setProperty("--input-font-size", S.inputFontSize + "px");
@@ -774,7 +976,22 @@ function applyFontSizes() {
     r.style.setProperty("--rank-name-font-size", S.rankNameFontSize + "px");
     r.style.setProperty("--rank-range-font-size", S.rankRangeFontSize + "px");
     r.style.setProperty("--badge-font-size", S.roleBadgeFontSize + "px");
-    // Высота textarea зависит от кегля
+    r.style.setProperty("--history-font-size", S.historyFontSize + "px");
+
+    // Гарнитуры
+    r.style.setProperty("--font-display", fontCss(S.fontDisplay, "uncial"));
+    r.style.setProperty("--font-heading", fontCss(S.fontHeading, "cormorant"));
+    r.style.setProperty("--font-body", fontCss(S.fontBody, "philosopher"));
+
+    // Ритм и плотность
+    r.style.setProperty("--input-line-height", String(S.inputLineHeight));
+    r.style.setProperty("--history-line-height", S.historyLineHeight + "px");
+    r.style.setProperty("--label-letter-spacing", S.labelLetterSpacing + "px");
+    r.style.setProperty("--name-letter-spacing", S.nameLetterSpacing + "px");
+    r.style.setProperty("--history-rule-opacity", String(S.historyRuleOpacity));
+    r.style.setProperty("--field-row-padding", S.fieldRowPadding + "px");
+
+    // Высота textarea зависит от кегля и интерлиньяжа
     sheet?.querySelectorAll("textarea").forEach(autoGrow);
   });
 }
@@ -2236,7 +2453,10 @@ function renderCustomField(f, container = null, isR = false) {
   });
 
   c.appendChild(w);
-  if (el.tagName === "TEXTAREA") autoGrow(el);
+  if (el.tagName === "TEXTAREA") {
+    autoGrow(el);
+    attachMarkdown(el);
+  }
 }
 
 function initAddDivider() {
@@ -2578,6 +2798,7 @@ function applyDualMode() {
 
       restoreDualValues();
       bindDualChangeHandlers();
+      initMarkdown();
     } else {
       rc.style.display = "";
     }
@@ -2693,7 +2914,7 @@ function createDualFields(c) {
   const hb = document.createElement("div");
   hb.className = "history-block";
   hb.dataset.fieldId = "r-history";
-  hb.innerHTML = `<div class="field-delete-btn ui-only" data-target="r-history" data-side="right" title="Удалить">✕</div><div class="history-header"><svg width="100%" height="48" viewBox="0 0 800 48" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><line x1="0" y1="24" x2="240" y2="24" stroke="#7a4a1a" stroke-width="1.5"/><path d="M240,24L260,11L295,24L260,37Z" fill="#9a6425" stroke="#7a4a1a" stroke-width="1"/><text x="400" y="33" font-family="'Uncial Antiqua',serif" font-size="32" fill="#3b1f0a" text-anchor="middle" letter-spacing="6">История</text><path d="M560,24L540,11L505,24L540,37Z" fill="#9a6425" stroke="#7a4a1a" stroke-width="1"/><line x1="560" y1="24" x2="800" y2="24" stroke="#7a4a1a" stroke-width="1.5"/></svg></div><textarea class="history-textarea" id="field-r-history" placeholder="История второго персонажа..."></textarea>`;
+  hb.innerHTML = `<div class="field-delete-btn ui-only" data-target="r-history" data-side="right" title="Удалить">✕</div><div class="history-header"><div class="field-icon-wrap" data-icon="scroll"></div><svg width="100%" height="48" viewBox="0 0 800 48" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><line x1="0" y1="24" x2="240" y2="24" stroke="#7a4a1a" stroke-width="1.5"/><path d="M240,24L260,11L295,24L260,37Z" fill="#9a6425" stroke="#7a4a1a" stroke-width="1"/><text x="400" y="33" font-family="'Uncial Antiqua',serif" font-size="32" fill="#3b1f0a" text-anchor="middle" letter-spacing="6">История</text><path d="M560,24L540,11L505,24L540,37Z" fill="#9a6425" stroke="#7a4a1a" stroke-width="1"/><line x1="560" y1="24" x2="800" y2="24" stroke="#7a4a1a" stroke-width="1.5"/></svg></div><textarea class="history-textarea" id="field-r-history" placeholder="История второго персонажа..."></textarea>`;
   c.appendChild(hb);
   c.querySelectorAll(".field-icon-wrap[data-icon]").forEach((el) => {
     const k = el.dataset.icon;
@@ -2857,6 +3078,53 @@ async function exportToPNG(ret = false) {
   const uiPrev = uiEls.map((e) => e.style.display);
   uiEls.forEach((e) => (e.style.display = "none"));
 
+  // html2canvas не понимает var()/calc() в вычисленных стилях.
+  // Подставляем уже посчитанные пиксели на время съёмки и
+  // возвращаем переменные обратно в finally.
+  const rootStyle = document.documentElement.style;
+  const varsPrev = new Map();
+  const freezeVar = (name, value) => {
+    varsPrev.set(name, rootStyle.getPropertyValue(name));
+    rootStyle.setProperty(name, value);
+  };
+  freezeVar("--input-line-height", String(S.inputLineHeight));
+  freezeVar("--history-line-height", S.historyLineHeight + "px");
+  freezeVar("--history-font-size", S.historyFontSize + "px");
+  freezeVar("--label-font-size", S.labelFontSize + "px");
+  freezeVar("--input-font-size", S.inputFontSize + "px");
+
+  // Разлиновка «Истории» задана repeating-linear-gradient с вложенными
+  // calc(var(...)) — html2canvas такое не разбирает. На время съёмки
+  // подставляем полностью вычисленный градиент.
+  const lhPx = S.historyLineHeight;
+  const ruleColor = S.theme
+    ? theme.historyLine
+    : `rgba(100,60,20,${(0.13 * S.historyRuleOpacity).toFixed(3)})`;
+  const flatRule = `repeating-linear-gradient(to bottom,transparent 0px,transparent ${lhPx - 1}px,${ruleColor} ${lhPx - 1}px,${ruleColor} ${lhPx}px)`;
+  // Подстраховка для html2canvas: он читает вычисленные стили и
+  // спотыкается о var()/calc(), если движок их не развернул.
+  // Временная таблица задаёт те же значения готовыми пикселями.
+  const L = S.labelFontSize;
+  const I = S.inputFontSize;
+  const exportStyle = document.createElement("style");
+  exportStyle.id = "export-flatten";
+  exportStyle.textContent = `
+    .history-textarea,.history-block .md-view{background-image:${flatRule} !important;}
+    .field-icon-wrap,.custom-block .field-icon-wrap{height:${Math.max(52, Math.round(L * 1.2))}px !important;}
+    .heading-input{font-size:${Math.round(L * 1.5)}px !important;}
+    .stat-num{font-size:${Math.round(I * 0.95)}px !important;}
+    .stat-max{font-size:${Math.round(I * 0.6)}px !important;}
+    .quote-mark{font-size:${Math.round(I * 1.9)}px !important;}
+    .quote-author{font-size:${Math.round(I * 0.68)}px !important;}
+    .tag-chip,.tags-empty{font-size:${Math.round(I * 0.72)}px !important;}
+    .tags-input{font-size:${Math.round(I * 0.6)}px !important;}
+    .list-bullet{font-size:${Math.round(I * 0.5)}px !important;}
+    .list-add{font-size:${Math.round(I * 0.55)}px !important;}
+    .field-input,.custom-field-textarea,.md-view{line-height:${(S.inputLineHeight * I).toFixed(1)}px !important;}
+    .history-textarea,.history-block .md-view{line-height:${S.historyLineHeight}px !important;}
+  `;
+  document.head.appendChild(exportStyle);
+
   fixFrameCornersForExport();
 
   const pI = sheet.querySelector("#portrait-img");
@@ -2870,6 +3138,7 @@ async function exportToPNG(ret = false) {
     bI.style.cssText = `transform:none;position:absolute;left:${S.bg.x}px;top:${S.bg.y}px;width:${S.bg.nw * S.bg.sc}px;height:${S.bg.nh * S.bg.sc}px;`;
 
   const reps = [];
+  const restoreMd = [];
 
   /** Заменяет поле статическим блоком с теми же метриками. */
   const replace = (el, div) => {
@@ -2978,6 +3247,45 @@ async function exportToPNG(ret = false) {
     const isH = ta.classList.contains("history-textarea");
     const cs = getComputedStyle(ta);
 
+    // Markdown: в PNG уходит отрисованная разметка, а не сырой текст
+    const host = ta.parentElement;
+    const mdView =
+      S.markdownEnabled && host?.classList.contains("md-host")
+        ? host.querySelector(".md-view")
+        : null;
+    if (mdView && v.trim()) {
+      const box = document.createElement("div");
+      box.innerHTML = renderMarkdown(v);
+      const fs = isH ? S.historyFontSize : S.inputFontSize;
+      const lh = isH
+        ? S.historyLineHeight
+        : Math.round(S.inputFontSize * S.inputLineHeight);
+      styleMarkdownForExport(box, {
+        color: isH ? theme.historyColor : theme.customColor,
+        accent: theme.headingColor,
+        line: theme.historyLine,
+        fontSize: fs,
+        lineHeight: lh,
+      });
+      const mh = Math.max(mdView.scrollHeight, mdView.offsetHeight, isH ? 580 : 54);
+      const bg = isH
+        ? `background-image:repeating-linear-gradient(to bottom,transparent 0px,transparent ${lh - 1}px,${theme.historyLine} ${lh - 1}px,${theme.historyLine} ${lh}px);`
+        : "";
+      box.style.cssText =
+        `font-family:${cssVal(cs, "fontFamily", "'Philosopher',serif")};font-size:${fs}px;` +
+        `color:${isH ? theme.historyColor : theme.customColor};background:transparent;display:block;` +
+        `width:100%;min-height:${mh}px;border:none;padding:${isH ? "0 6px" : "4px 0 6px"};` +
+        `line-height:${lh}px;word-break:break-word;overflow:hidden;box-sizing:border-box;${bg}`;
+      // Прячем и textarea, и живой предпросмотр — вместо них статичный блок
+      mdView.before(box);
+      const prevView = mdView.style.display;
+      mdView.style.display = "none";
+      ta.style.display = "none";
+      reps.push([ta, box]);
+      restoreMd.push([mdView, prevView]);
+      return;
+    }
+
     // Цитата: курсив, без подчёркивания, высота по содержимому
     if (ta.classList.contains("quote-text")) {
       const qh = Math.max(ta.scrollHeight, ta.offsetHeight, 58);
@@ -3046,8 +3354,17 @@ async function exportToPNG(ret = false) {
     if (bI) bI.style.cssText = bP;
     reps.forEach(([o, r]) => {
       o.style.display = "";
-      r.remove();
+      r?.remove();
     });
+    exportStyle.remove();
+    varsPrev.forEach((v, k) => {
+      if (v) rootStyle.setProperty(k, v);
+      else rootStyle.removeProperty(k);
+    });
+    restoreMd.forEach(([view, prev]) => (view.style.display = prev));
+    // Пересобираем предпросмотр в следующем кадре: к этому моменту
+    // все подменные узлы уже удалены и display полей восстановлен
+    scheduleFrame("mdRestore", refreshAllMarkdown);
     applyView();
   }
 
@@ -3310,6 +3627,25 @@ function applyLoadedData(d) {
   if (typeof d.themeGradient === "boolean") S.themeGradient = d.themeGradient;
   if (typeof d.themeOpacity === "number")
     S.themeOpacity = clamp(d.themeOpacity, 0.3, 1);
+  if (FONT_SETS[d.fontDisplay]) S.fontDisplay = d.fontDisplay;
+  if (FONT_SETS[d.fontHeading]) S.fontHeading = d.fontHeading;
+  if (FONT_SETS[d.fontBody]) S.fontBody = d.fontBody;
+  if (typeof d.inputLineHeight === "number")
+    S.inputLineHeight = clamp(d.inputLineHeight, 1, 2.2);
+  if (typeof d.historyLineHeight === "number")
+    S.historyLineHeight = clamp(d.historyLineHeight, 30, 110);
+  if (typeof d.historyFontSize === "number")
+    S.historyFontSize = clamp(d.historyFontSize, 18, 72);
+  if (typeof d.labelLetterSpacing === "number")
+    S.labelLetterSpacing = clamp(d.labelLetterSpacing, 0, 14);
+  if (typeof d.nameLetterSpacing === "number")
+    S.nameLetterSpacing = clamp(d.nameLetterSpacing, 0, 24);
+  if (typeof d.historyRuleOpacity === "number")
+    S.historyRuleOpacity = clamp(d.historyRuleOpacity, 0, 1);
+  if (typeof d.fieldRowPadding === "number")
+    S.fieldRowPadding = clamp(d.fieldRowPadding, 6, 60);
+  if (typeof d.markdownEnabled === "boolean")
+    S.markdownEnabled = d.markdownEnabled;
   if (typeof d.dualMode === "boolean") S.dualMode = d.dualMode;
   if (d.currentCharacterId) S.currentCharacterId = d.currentCharacterId;
   if (typeof d.roleBadgeCustomText === "string")
@@ -3378,6 +3714,8 @@ function restoreAll() {
     applyCustomColor();
   }
   syncThemePanel();
+
+  refreshAllMarkdown();
 
   // Автосохранение при вводе в стандартные поля
   FIELD_IDS.forEach((id) => {
@@ -3519,8 +3857,148 @@ function showToast(msg, err = false) {
 function autoGrow(el) {
   if (!el) return;
   const min = el.classList.contains("history-textarea") ? 580 : 54;
+  // Если поле скрыто под markdown-предпросмотром, scrollHeight = 0 —
+  // измеряем во временно видимом состоянии, иначе высота схлопнется.
+  const hidden = el.style.display === "none";
+  if (hidden) {
+    el.style.visibility = "hidden";
+    el.style.display = "";
+  }
   el.style.height = "auto";
   el.style.height = Math.max(min, el.scrollHeight) + "px";
+  if (hidden) {
+    el.style.display = "none";
+    el.style.visibility = "";
+  }
+}
+
+// ============================================================
+// MARKDOWN В МНОГОСТРОЧНЫХ ПОЛЯХ
+// ------------------------------------------------------------
+// textarea остаётся источником правды, но пока поле не в фокусе
+// рядом показывается отрисованный markdown — он же попадает в PNG.
+// ============================================================
+
+/** Многострочные поля, поддерживающие разметку. */
+function markdownTargets() {
+  return sheet
+    ? Array.from(
+        sheet.querySelectorAll(".history-textarea, .custom-field-textarea"),
+      )
+    : [];
+}
+
+/** Обновляет предпросмотр одного поля. */
+function refreshMarkdown(ta) {
+  const host = ta?.parentElement;
+  if (!host || !host.classList.contains("md-host")) return;
+  const view = host.querySelector(".md-view");
+  if (!view) return;
+
+  const raw = ta.value || "";
+  if (!S.markdownEnabled) {
+    // Разметка выключена — показываем textarea как обычно
+    view.style.display = "none";
+    ta.style.display = "";
+    return;
+  }
+
+  const editing = document.activeElement === ta || host.dataset.editing === "1";
+  if (editing) {
+    view.style.display = "none";
+    ta.style.display = "";
+    return;
+  }
+
+  if (raw.trim()) {
+    view.innerHTML = renderMarkdown(raw);
+    view.classList.remove("is-empty");
+  } else {
+    view.textContent = ta.placeholder || "";
+    view.classList.add("is-empty");
+  }
+  view.style.display = "";
+  ta.style.display = "none";
+}
+
+function refreshAllMarkdown() {
+  markdownTargets().forEach(refreshMarkdown);
+}
+
+/** Оборачивает textarea в контейнер с предпросмотром. */
+function attachMarkdown(ta) {
+  if (!ta || ta.dataset.mdReady === "1") return;
+  ta.dataset.mdReady = "1";
+
+  const host = document.createElement("div");
+  host.className = "md-host";
+  ta.parentNode.insertBefore(host, ta);
+  host.appendChild(ta);
+
+  const view = document.createElement("div");
+  view.className = "md-view";
+  host.appendChild(view);
+
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "md-toggle ui-only";
+  toggle.title = "Показать исходный текст с разметкой";
+  toggle.textContent = "✎ разметка";
+  host.appendChild(toggle);
+
+  // Клик по предпросмотру — переходим к редактированию
+  view.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    host.dataset.editing = "1";
+    refreshMarkdown(ta);
+    ta.focus();
+    // курсор в конец
+    const len = ta.value.length;
+    try {
+      ta.setSelectionRange(len, len);
+    } catch {}
+  });
+
+  ta.addEventListener("focus", () => {
+    host.dataset.editing = "1";
+    refreshMarkdown(ta);
+  });
+
+  ta.addEventListener("blur", () => {
+    delete host.dataset.editing;
+    if (toggle.classList.contains("on")) return; // закреплён режим правки
+    refreshMarkdown(ta);
+  });
+
+  ta.addEventListener("input", () => {
+    autoGrow(ta);
+    if (toggle.classList.contains("on")) return;
+  });
+
+  toggle.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const on = toggle.classList.toggle("on");
+    toggle.textContent = on ? "◱ результат" : "✎ разметка";
+    toggle.title = on
+      ? "Вернуться к оформленному виду"
+      : "Показать исходный текст с разметкой";
+    if (on) {
+      host.dataset.editing = "1";
+      refreshMarkdown(ta);
+      ta.focus();
+    } else {
+      delete host.dataset.editing;
+      refreshMarkdown(ta);
+    }
+  });
+
+  refreshMarkdown(ta);
+}
+
+function initMarkdown() {
+  markdownTargets().forEach(attachMarkdown);
+  refreshAllMarkdown();
 }
 
 function initAutoGrowTextareas() {
