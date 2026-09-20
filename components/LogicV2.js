@@ -267,6 +267,9 @@ export function initApp() {
   applyFontSizes();
   injectFieldIcons();
   applyCustomColor();
+  // Лист должен вмещать контент ДО первого fit — иначе вписывание
+  // считается по старой высоте и анкета выглядит обрезанной
+  autoFitSheetHeight();
   fitToScreen();
 
   initPan();
@@ -299,6 +302,18 @@ export function initApp() {
   // Применяем значения новых полей после восстановления
   applyStatusToUI();
   applyReputationToUI();
+
+  // Кастомные поля из restoreAll могли сделать контент выше —
+  // подгоняем и пересчитываем вписывание
+  if (autoFitSheetHeight()) fitToScreen();
+
+  // Веб-шрифты (Cormorant Garamond и т.п.) догружаются асинхронно —
+  // их метрики меняют высоту блоков, поэтому меряем ещё раз
+  if (document.fonts?.ready) {
+    document.fonts.ready.then(() => {
+      autoFitSheetHeight();
+    });
+  }
 
   startAutoSave();
   updateRoleBadge();
@@ -681,6 +696,8 @@ function applyFontSizes() {
   r.style.setProperty("--ery-font-size", S.eryFontSize + "px");
   r.style.setProperty("--rank-name-font-size", S.rankNameFontSize + "px");
   r.style.setProperty("--rank-range-font-size", S.rankRangeFontSize + "px");
+  // Крупные шрифты делают блоки выше — лист должен подрасти
+  autoFitSheetHeight();
 }
 
 // ============================================================
@@ -827,6 +844,40 @@ function applyFieldOrder() {
 function applySheetSize() {
   sheet.style.width = S.sheetW + "px";
   sheet.style.height = S.sheetH + "px";
+}
+// ============================================================
+// AUTOFIT: высота листа всегда вмещает контент.
+// Блоки v2 (девиз, репутация, статус, символ рода, узы, история)
+// заметно выше, чем было в v1 — при фиксированной высоте 2400px
+// они вылезали за пергамент и обрезались (overflow: hidden).
+// Лист только РАСТЁТ (ручное уменьшение не трогаем).
+// Возвращает true, если высота изменилась.
+// ============================================================
+const AUTOFIT_SKIP = new Set([
+  "sheet-bg-layer",
+  "sheet-parchment",
+  "sheet-resize-handle",
+  "sheet-resize-x",
+]);
+function autoFitSheetHeight() {
+  if (!sheet) return false;
+  let maxBottom = 0;
+  sheet.querySelectorAll(":scope > *").forEach((el) => {
+    if (AUTOFIT_SKIP.has(el.id)) return;
+    if (el.classList.contains("sheet-border")) return;
+    if (el.classList.contains("v2-corner")) return; // позиционируются от низа
+    const b = el.offsetTop + el.offsetHeight;
+    if (b > maxBottom) maxBottom = b;
+  });
+  // + запас на нижний отступ (padding 80px) и погрешность шрифтов
+  const need = Math.ceil(maxBottom + 56);
+  if (need > S.sheetH) {
+    S.sheetH = Math.min(need, 12000);
+    sheet.style.height = S.sheetH + "px";
+    applyView();
+    return true;
+  }
+  return false;
 }
 function applyPortraitSize() {
   portColEl.style.width = S.portW + "px";
@@ -1310,6 +1361,7 @@ function initPortraitResizeY() {
     if (S.portResizingY) {
       S.portResizingY = false;
       document.body.style.cursor = "";
+      autoFitSheetHeight();
       saveTempState();
     }
   });
@@ -1437,6 +1489,7 @@ function initRestoreFields() {
     if (!b) return;
     showField(b.dataset.id);
     b.parentElement.remove();
+    autoFitSheetHeight();
     updateFieldOrder();
     saveTempState();
     if (S.hiddenFields.size === 0)
@@ -1479,6 +1532,7 @@ function initAddField() {
     const fL = { id, label, type, icon, value: "" };
     S.customFields.push(fL);
     renderCustomField(fL);
+    autoFitSheetHeight();
     $("new-field-label").value = "";
     modal.style.display = "none";
     updateFieldOrder();
@@ -1677,6 +1731,7 @@ function initAddDivider() {
     const dL = { id, type: "divider" };
     S.customFields.push(dL);
     renderCustomDivider(dL);
+    autoFitSheetHeight();
     updateFieldOrder();
     saveTempState();
   });
@@ -1954,6 +2009,20 @@ async function exportToPNG(ret = false) {
     bI.style.cssText = `transform:none;position:absolute;left:${S.bg.x}px;top:${S.bg.y}px;width:${S.bg.nw * S.bg.sc}px;height:${S.bg.nh * S.bg.sc}px;`;
   const reps = [];
 
+  // html2canvas не рендерит inline-SVG с width="100%" (разделители,
+  // заголовок «Хроника» и т.п.) — задаём им явные пиксельные размеры,
+  // а после снятия скриншота возвращаем как было.
+  const svgFixes = [];
+  sheet.querySelectorAll("svg").forEach((sv) => {
+    const r = sv.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    const pw = sv.getAttribute("width"),
+      ph = sv.getAttribute("height");
+    sv.setAttribute("width", String(Math.round(r.width)));
+    sv.setAttribute("height", String(Math.round(r.height)));
+    svgFixes.push([sv, pw, ph]);
+  });
+
   // Имена
   [
     ["#header-name-input", S.nameFontSize],
@@ -2008,35 +2077,75 @@ async function exportToPNG(ret = false) {
       // Специальная обработка для новых блоков v2
       const v = ta.value || "";
       const isMotto = ta.id === "v2-motto-input";
+      if (isMotto) {
+        const d = makeDiv(
+          v || "Девиз или изречение этого создания…",
+          `font-family:'Cormorant Garamond',serif;` +
+            `font-style:italic;font-size:38px;` +
+            `color:${v ? theme.historyColor : theme.historyPlaceholder};` +
+            `background:transparent;display:block;width:100%;` +
+            `text-align:center;border:none;` +
+            `line-height:1.35;white-space:pre-wrap;word-break:break-word;` +
+            `opacity:${v ? "1" : "0.5"};box-sizing:border-box;padding:0 14px;`,
+        );
+        ta.before(d);
+        ta.style.display = "none";
+        reps.push([ta, d]);
+        return;
+      }
+      // Узы: текст + линовка отдельными div-ами (html2canvas не рендерит
+      // repeating-linear-gradient)
+      const wrap = document.createElement("div");
+      wrap.style.cssText =
+        "position:relative;width:100%;min-height:180px;box-sizing:border-box;";
       const d = makeDiv(
-        v ||
-          (isMotto
-            ? "Девиз или изречение этого создания…"
-            : "Узы, клятвы, долг перед близкими…"),
-        `font-family:${isMotto ? "'Cormorant Garamond',serif" : "'Philosopher',serif"};` +
-          `font-style:italic;font-size:${isMotto ? "38px" : "28px"};` +
+        v || "Узы, клятвы, долг перед близкими…",
+        `font-family:'Philosopher',serif;` +
+          `font-style:italic;font-size:28px;` +
           `color:${v ? theme.historyColor : theme.historyPlaceholder};` +
           `background:transparent;display:block;width:100%;` +
-          `text-align:${isMotto ? "center" : "left"};border:none;` +
-          `line-height:${isMotto ? "1.35" : "48px"};white-space:pre-wrap;word-break:break-word;` +
+          `text-align:left;border:none;` +
+          `line-height:48px;white-space:pre-wrap;word-break:break-word;` +
           `opacity:${v ? "1" : "0.5"};box-sizing:border-box;padding:0 14px;` +
-          (isMotto
-            ? ""
-            : `background-image:repeating-linear-gradient(to bottom,transparent 0px,transparent 47px,${theme.historyLine} 47px,${theme.historyLine} 48px);min-height:180px;`),
+          `position:relative;z-index:1;`,
       );
-      ta.before(d);
+      wrap.appendChild(d);
+      for (let ly = 47; ly < 180; ly += 48) {
+        const ln = document.createElement("div");
+        ln.style.cssText = `position:absolute;left:0;right:0;top:${ly}px;height:1px;background:${theme.historyLine};`;
+        wrap.appendChild(ln);
+      }
+      ta.before(wrap);
       ta.style.display = "none";
-      reps.push([ta, d]);
+      reps.push([ta, wrap]);
       return;
     }
     const v = ta.value || "";
     const isH = ta.classList.contains("history-textarea");
-    const bg = isH
-      ? `background-image:repeating-linear-gradient(to bottom,transparent 0px,transparent 53px,${theme.historyLine} 53px,${theme.historyLine} 54px);`
-      : "";
+    // html2canvas не рендерит repeating-linear-gradient — линовку под текст
+    // («тетрадные линии» истории) рисуем настоящими div-ами.
+    if (isH) {
+      const wrap = document.createElement("div");
+      wrap.style.cssText =
+        "position:relative;width:100%;min-height:380px;box-sizing:border-box;";
+      const d = makeDiv(
+        v || ta.placeholder || "",
+        `font-family:'Philosopher',serif;font-size:32px;color:${v ? theme.historyColor : theme.historyPlaceholder};background:transparent;display:block;width:100%;border:none;padding:0 6px;line-height:54px;white-space:pre-wrap;word-break:break-word;overflow:hidden;box-sizing:border-box;font-style:${v ? "normal" : "italic"};position:relative;z-index:1;`,
+      );
+      wrap.appendChild(d);
+      for (let ly = 53; ly < 380; ly += 54) {
+        const ln = document.createElement("div");
+        ln.style.cssText = `position:absolute;left:0;right:0;top:${ly}px;height:1px;background:${theme.historyLine};`;
+        wrap.appendChild(ln);
+      }
+      ta.before(wrap);
+      ta.style.display = "none";
+      reps.push([ta, wrap]);
+      return;
+    }
     const d = makeDiv(
       v || ta.placeholder || "",
-      `font-family:'Philosopher',serif;font-size:${isH ? "32px" : S.inputFontSize + "px"};color:${v ? (isH ? theme.historyColor : theme.customColor) : isH ? theme.historyPlaceholder : theme.customPlaceholder};background:transparent;display:block;width:100%;min-height:${isH ? "380px" : "54px"};border:none;border-bottom:${isH ? "none" : `1px dashed ${theme.customBorder}`};padding:${isH ? "0 6px" : "4px 0 6px"};line-height:${isH ? "54px" : "1.5"};white-space:pre-wrap;word-break:break-word;overflow:hidden;box-sizing:border-box;font-style:${v ? "normal" : "italic"};${bg}`,
+      `font-family:'Philosopher',serif;font-size:${S.inputFontSize + "px"};color:${v ? theme.customColor : theme.customPlaceholder};background:transparent;display:block;width:100%;min-height:54px;border:none;border-bottom:1px dashed ${theme.customBorder};padding:4px 0 6px;line-height:1.5;white-space:pre-wrap;word-break:break-word;overflow:hidden;box-sizing:border-box;font-style:${v ? "normal" : "italic"};`,
     );
     ta.before(d);
     ta.style.display = "none";
@@ -2066,6 +2175,12 @@ async function exportToPNG(ret = false) {
   } finally {
     Object.assign(sheet.style, prev);
     uiEls.forEach((e, i) => (e.style.display = uiPrev[i] || ""));
+    svgFixes.forEach(([sv, pw, ph]) => {
+      if (pw == null) sv.removeAttribute("width");
+      else sv.setAttribute("width", pw);
+      if (ph == null) sv.removeAttribute("height");
+      else sv.setAttribute("height", ph);
+    });
     if (pI) pI.style.cssText = pP;
     if (bI) bI.style.cssText = bP;
     reps.forEach(([o, r]) => {
@@ -2281,6 +2396,7 @@ async function fetchCharacterById(charId) {
     applyCustomColor();
     restoreAll();
     updateFieldOrder();
+    autoFitSheetHeight();
     fitToScreen();
     saveTempState();
     showToast("✓ Анкета загружена");

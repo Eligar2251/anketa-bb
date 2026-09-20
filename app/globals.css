@@ -227,7 +227,10 @@ body {
   border: 1px solid rgba(122, 74, 26, 0.35);
 }
 
-#sheet > *:not(#sheet-bg-layer):not(#sheet-parchment):not(.sheet-border):not(#sheet-resize-handle):not(#sheet-resize-x) {
+/* ВАЖНО: .v2-corner (угловые орнаменты v2) исключены — им нужен
+   position: absolute, иначе они встают в поток и ломают всю вёрстку.
+   ID-селектор здесь перебивает любые .v2-app .v2-corner по специфичности. */
+#sheet > *:not(#sheet-bg-layer):not(#sheet-parchment):not(.sheet-border):not(#sheet-resize-handle):not(#sheet-resize-x):not(.v2-corner) {
   position: relative;
   z-index: 3;
 }
