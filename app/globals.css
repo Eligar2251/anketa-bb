@@ -1807,3 +1807,848 @@ body {
 .portrait-img-wrapper:not(.active) #portrait-img {
   will-change: auto;
 }
+/* ============================================================
+   ============================================================
+   ДИЗАЙН v2 — ВИКТОРИАНСКОЕ ФЭНТЕЗИ
+   Все стили изолированы префиксом v2- и применяются ТОЛЬКО когда
+   пользователь заходит на /v2. Старый дизайн (/editor) не трогается.
+   ============================================================
+   ============================================================ */
+
+/* Когда открыта v2-страница, делаем фон чуть темнее — для контраста */
+body.v2-app { background: #1a0e05 !important; }
+
+/* ============================================================
+   v2 — Общий фон листа
+   ============================================================ */
+.v2-app #sheet {
+  background-color: #f0e4c4;
+  /* Лёгкая текстура пергамента */
+  background-image:
+    radial-gradient(ellipse at 30% 20%, rgba(255, 240, 200, 0.6) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 80%, rgba(220, 180, 130, 0.4) 0%, transparent 55%),
+    radial-gradient(circle at 50% 50%, rgba(190, 140, 90, 0.15) 0%, transparent 70%);
+}
+
+.v2-app #sheet-parchment {
+  background: rgba(245, 230, 195, 0.65);
+}
+
+.v2-app .sheet-border {
+  border: 4px double #7a4a1a;
+  inset: 18px;
+}
+
+.v2-app .sheet-border::before {
+  inset: 8px;
+  border: 1px solid rgba(122, 74, 26, 0.4);
+}
+
+/* Угловые викторианские орнаменты */
+.v2-app .v2-corner {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  width: 160px;
+  height: 160px;
+}
+.v2-app .v2-corner-tl { top: 18px;    left: 18px;   }
+.v2-app .v2-corner-tr { top: 18px;    right: 18px;  transform: scaleX(-1); }
+.v2-app .v2-corner-bl { bottom: 18px; left: 18px;   transform: scaleY(-1); }
+.v2-app .v2-corner-br { bottom: 18px; right: 18px;  transform: scale(-1, -1); }
+
+/* ============================================================
+   v2 — Шапка: геральдический щит + восковая печать + статус
+   ============================================================ */
+.v2-app .v2-header {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
+  margin-bottom: 26px;
+  margin-top: 8px;
+  min-height: 220px;
+}
+
+.v2-app .v2-shield-wrap {
+  position: relative;
+  width: 640px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.v2-app .v2-shield-wrap svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.25));
+}
+
+.v2-app .v2-shield-wrap .header-name-input {
+  position: absolute;
+  top: 65%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 58%;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: var(--name-font-size) !important;
+  font-weight: 700;
+  color: #2a1206;
+  background: transparent;
+  border: none;
+  outline: none;
+  text-align: center;
+  letter-spacing: 5px;
+  line-height: 1;
+  padding: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 6;
+  text-shadow: 0 1px 1px rgba(255, 230, 180, 0.4);
+}
+
+.v2-app .v2-shield-wrap .header-name-input::placeholder {
+  color: rgba(42, 18, 6, 0.4);
+  font-style: italic;
+}
+
+/* Восковая печать с ролью */
+.v2-app .v2-seal-wrap {
+  position: relative;
+  width: 150px;
+  height: 150px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.v2-app .v2-seal-wrap svg {
+  display: block;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.4));
+  transition: transform 0.2s;
+}
+
+.v2-app .v2-seal-wrap:hover svg {
+  transform: scale(1.05);
+}
+
+.v2-app .v2-seal-label {
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Uncial Antiqua', serif;
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: #8b0000;
+  text-transform: uppercase;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Роль badge внутри печати */
+.v2-app .v2-role-badge-sheet {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  pointer-events: auto;
+}
+
+.v2-app .v2-role-badge-sheet .role-badge-text {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffd0a0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  letter-spacing: 1px;
+  text-align: center;
+  max-width: 118px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.05;
+  cursor: pointer;
+}
+
+.v2-app .v2-role-badge-sheet .role-badge-edit-input {
+  display: none;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 18px;
+  color: #ffd0a0;
+  background: rgba(139, 0, 0, 0.6);
+  border: 1px dashed rgba(255, 208, 160, 0.6);
+  text-align: center;
+  padding: 2px 6px;
+  outline: none;
+  width: 96px;
+}
+
+/* Знак статуса */
+.v2-app .v2-status-badge {
+  position: absolute;
+  top: 10px;
+  right: 30px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border: 1.5px solid #5a3a1a;
+  border-radius: 20px;
+  background: rgba(245, 230, 200, 0.9);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  font-family: 'Uncial Antiqua', serif;
+  letter-spacing: 2px;
+  font-size: 18px;
+  z-index: 7;
+  user-select: none;
+  pointer-events: none;
+}
+
+.v2-app .v2-status-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.v2-app .v2-status-badge.st-alive    { border-color: #4a7c2a; color: #2a4a1a; background: rgba(225, 245, 215, 0.92); }
+.v2-app .v2-status-badge.st-deceased { border-color: #8b0000; color: #5a0000; background: rgba(245, 215, 220, 0.92); }
+.v2-app .v2-status-badge.st-missing  { border-color: #707060; color: #3a3a2a; background: rgba(235, 232, 215, 0.92); }
+.v2-app .v2-status-badge.st-unknown  { border-color: #4169e1; color: #1e3a8a; background: rgba(215, 225, 245, 0.92); }
+
+/* Строка статуса в блоке «Состояние» — видна и в PNG/печати */
+.v2-app .v2-status-display {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 22px;
+  margin-bottom: 4px;
+  border: 1.5px solid #5a3a1a;
+  border-radius: 4px;
+  background: rgba(245, 230, 200, 0.85);
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.v2-app .v2-status-display-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.v2-app .v2-status-display.st-alive    { border-color: #4a7c2a; color: #2a4a1a; background: rgba(225, 245, 215, 0.9); }
+.v2-app .v2-status-display.st-deceased { border-color: #8b0000; color: #5a0000; background: rgba(245, 215, 220, 0.9); }
+.v2-app .v2-status-display.st-missing  { border-color: #707060; color: #3a3a2a; background: rgba(235, 232, 215, 0.9); }
+.v2-app .v2-status-display.st-unknown  { border-color: #4169e1; color: #1e3a8a; background: rgba(215, 225, 245, 0.9); }
+
+/* ============================================================
+   v2 — Девиз (центральный элемент под шапкой)
+   ============================================================ */
+.v2-app .v2-motto-block {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin-bottom: 32px;
+  position: relative;
+  z-index: 3;
+}
+
+.v2-app .v2-motto-wrap {
+  position: relative;
+  width: 92%;
+  max-width: 1400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 22px 60px;
+  background: linear-gradient(
+    180deg,
+    rgba(245, 230, 200, 0.55),
+    rgba(225, 205, 165, 0.4),
+    rgba(245, 230, 200, 0.55)
+  );
+  border-top: 1px solid rgba(122, 74, 26, 0.45);
+  border-bottom: 1px solid rgba(122, 74, 26, 0.45);
+}
+
+.v2-app .v2-motto-wrap::before,
+.v2-app .v2-motto-wrap::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 50px;
+  height: 1px;
+  background: rgba(122, 74, 26, 0.45);
+}
+
+.v2-app .v2-motto-wrap::before { top: -3px; }
+.v2-app .v2-motto-wrap::after { bottom: -3px; }
+
+.v2-app .v2-motto-quote {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 64px;
+  color: #7a4a1a;
+  opacity: 0.5;
+  line-height: 1;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.v2-app .v2-motto-quote-left { align-self: flex-start; }
+.v2-app .v2-motto-quote-right { align-self: flex-end; }
+
+.v2-app .v2-motto-input {
+  flex: 1;
+  width: 100%;
+  background: transparent;
+  border: 1px dashed rgba(122, 74, 26, 0.35);
+  outline: none;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 28px;
+  font-style: italic;
+  color: #2a1206;
+  text-align: center;
+  resize: none;
+  padding: 8px 14px;
+  line-height: 1.35;
+  min-height: 56px;
+}
+
+.v2-app .v2-motto-input::placeholder {
+  color: rgba(42, 18, 6, 0.4);
+}
+
+/* ============================================================
+   v2 — Портрет в овальной медальон-рамке
+   ============================================================ */
+.v2-app .portrait-area {
+  background: rgba(188, 152, 90, 0.1);
+  border-radius: 50% / 35%;
+  border: 6px solid #7a4a1a;
+  box-shadow:
+    inset 0 0 0 2px #d4a96a,
+    inset 0 0 0 8px #7a4a1a,
+    inset 0 0 30px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(122, 74, 26, 0.4);
+  position: relative;
+}
+
+.v2-app .portrait-area::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 50% / 35%;
+  border: 1px dashed rgba(212, 169, 106, 0.5);
+  pointer-events: none;
+  z-index: 4;
+}
+
+.v2-app .portrait-area::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    160deg,
+    rgba(255, 240, 200, 0.1) 0%,
+    transparent 30%,
+    transparent 70%,
+    rgba(0, 0, 0, 0.15) 100%
+  );
+  border-radius: 50% / 35%;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.v2-app .portrait-img-wrapper,
+.v2-app .portrait-placeholder {
+  border-radius: 50% / 35%;
+  overflow: hidden;
+}
+
+/* Скрываем рамки-углы, которые использовались в v1 */
+.v2-app .frame-corner,
+.v2-app .frame-line {
+  display: none !important;
+}
+
+/* ============================================================
+   v2 — Поля ввода (чуть меньше, с другим акцентом)
+   ============================================================ */
+.v2-app .field-label {
+  color: #8b6914;
+  letter-spacing: 3px;
+  font-size: var(--label-font-size) !important;
+}
+
+.v2-app .field-input {
+  border-bottom: 1px dashed rgba(122, 74, 26, 0.4);
+  font-size: var(--input-font-size) !important;
+}
+
+.v2-app .field-input::placeholder {
+  color: rgba(42, 18, 6, 0.32);
+}
+
+.v2-app .field-row,
+.v2-app .custom-field-row {
+  padding: 18px 56px 18px 0;
+  border-bottom: 1px solid rgba(122, 74, 26, 0.25);
+}
+
+.v2-app .ficon {
+  width: 44px;
+  height: 44px;
+  color: #7a4a1a;
+}
+
+/* ============================================================
+   v2 — РЕПУТАЦИЯ (новый блок)
+   ============================================================ */
+.v2-app .v2-reputation-block {
+  position: relative;
+  flex-shrink: 0;
+  padding: 18px 56px 22px 0;
+  border-top: 1px solid rgba(122, 74, 26, 0.25);
+  border-bottom: 1px solid rgba(122, 74, 26, 0.25);
+  background: linear-gradient(180deg, rgba(245, 230, 200, 0.4), rgba(225, 205, 165, 0.3));
+}
+
+.v2-app .v2-reputation-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.v2-app .v2-reputation-title {
+  font-family: 'Uncial Antiqua', 'Cormorant Garamond', serif;
+  font-size: 22px;
+  color: #8b6914;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+}
+
+.v2-app .v2-reputation-label {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px;
+  font-style: italic;
+  color: #3b1f0a;
+  font-weight: 700;
+}
+
+.v2-app .v2-reputation-bar {
+  position: relative;
+  width: 100%;
+  height: 16px;
+  background: rgba(122, 74, 26, 0.15);
+  border: 1px solid #7a4a1a;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.v2-app .v2-reputation-fill {
+  height: 100%;
+  width: 50%;
+  background: linear-gradient(90deg, #4a7c2a, #d4a96a, #8b1a1a);
+  transition: width 0.4s ease;
+  border-right: 2px solid #3b1f0a;
+}
+
+.v2-app .v2-reputation-markers {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-family: 'Philosopher', serif;
+  font-size: 11px;
+  color: #6a3a10;
+  letter-spacing: 1px;
+}
+
+.v2-app .v2-reputation-bar.rep-glorious .v2-reputation-fill { background: linear-gradient(90deg, #b8860b, #daa520); width: 100%; }
+.v2-app .v2-reputation-bar.rep-noble    .v2-reputation-fill { background: linear-gradient(90deg, #4a7c2a, #d4a96a); width: 75%; }
+.v2-app .v2-reputation-bar.rep-neutral  .v2-reputation-fill { background: linear-gradient(90deg, #8a8a7a, #d4a96a); width: 50%; }
+.v2-app .v2-reputation-bar.rep-shady    .v2-reputation-fill { background: linear-gradient(90deg, #4a4a3a, #8a8a7a); width: 30%; }
+.v2-app .v2-reputation-bar.rep-notorious .v2-reputation-fill { background: linear-gradient(90deg, #2a0a0a, #8b1a1a); width: 10%; }
+
+.v2-app .v2-reputation-selector {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+  justify-content: space-between;
+}
+
+.v2-app .v2-reputation-selector button {
+  flex: 1;
+  height: 36px;
+  border: 1px solid rgba(122, 74, 26, 0.4);
+  background: rgba(245, 230, 200, 0.6);
+  color: #3b1f0a;
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.v2-app .v2-reputation-selector button:hover {
+  background: rgba(122, 74, 26, 0.25);
+  transform: translateY(-1px);
+}
+
+.v2-app .v2-reputation-selector button.active {
+  background: #3b1f0a;
+  color: #d4a96a;
+  border-color: #d4a96a;
+  box-shadow: 0 0 8px rgba(212, 169, 106, 0.5);
+}
+
+/* ============================================================
+   v2 — СТАТУС (жив / мёртв / пропал)
+   ============================================================ */
+.v2-app .v2-status-block {
+  position: relative;
+  flex-shrink: 0;
+  padding: 18px 56px 18px 0;
+  border-bottom: 1px solid rgba(122, 74, 26, 0.25);
+}
+
+.v2-app .v2-status-header {
+  margin-bottom: 12px;
+}
+
+.v2-app .v2-status-title {
+  font-family: 'Uncial Antiqua', 'Cormorant Garamond', serif;
+  font-size: 22px;
+  color: #8b6914;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+}
+
+.v2-app .v2-status-selector {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.v2-app .v2-status-selector button {
+  height: 40px;
+  border: 1px solid rgba(122, 74, 26, 0.4);
+  background: rgba(245, 230, 200, 0.6);
+  color: #3b1f0a;
+  font-size: 14px;
+  cursor: pointer;
+  font-family: 'Philosopher', serif;
+  letter-spacing: 1px;
+  transition: all 0.15s;
+}
+
+.v2-app .v2-status-selector button:hover {
+  background: rgba(122, 74, 26, 0.2);
+}
+
+.v2-app .v2-status-selector button.active {
+  background: #3b1f0a;
+  color: #d4a96a;
+  border-color: #d4a96a;
+  font-weight: 700;
+}
+
+.v2-app .v2-status-hint {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 14px;
+  color: #7a4a1a;
+  margin-top: 8px;
+  opacity: 0.6;
+  text-align: center;
+}
+
+/* ============================================================
+   v2 — СИМВОЛ РОДА (герб) — новый блок
+   ============================================================ */
+.v2-app .v2-sigil-block {
+  position: relative;
+  flex-shrink: 0;
+  padding: 18px 56px 18px 0;
+  border-bottom: 1px solid rgba(122, 74, 26, 0.25);
+}
+
+.v2-app .v2-sigil-header {
+  margin-bottom: 14px;
+}
+
+.v2-app .v2-sigil-title {
+  font-family: 'Uncial Antiqua', 'Cormorant Garamond', serif;
+  font-size: 22px;
+  color: #8b6914;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+}
+
+.v2-app .v2-sigil-content {
+  display: flex;
+  gap: 28px;
+  align-items: center;
+}
+
+.v2-app .v2-sigil-preview {
+  flex-shrink: 0;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: transparent;
+  border: 2px dashed rgba(139, 105, 20, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Uncial Antiqua', serif;
+  font-size: 36px;
+  color: #7a4a1a;
+  position: relative;
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.25), 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.v2-app .v2-sigil-preview::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px solid rgba(212, 169, 106, 0.4);
+}
+
+.v2-app .v2-sigil-preview-label {
+  font-family: 'Uncial Antiqua', serif;
+  font-size: 32px;
+  color: #ffd0a0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  position: relative;
+  z-index: 1;
+}
+
+.v2-app .v2-sigil-controls {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.v2-app .v2-sigil-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.v2-app .v2-sigil-row label {
+  font-family: 'Philosopher', serif;
+  font-size: 14px;
+  color: #6a3a10;
+  letter-spacing: 1px;
+  min-width: 90px;
+}
+
+.v2-app .v2-sigil-row input[type="color"] {
+  width: 38px;
+  height: 28px;
+  border: 1px solid #7a4a1a;
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+}
+
+.v2-app .v2-sigil-row input[type="text"] {
+  flex: 1;
+  background: rgba(245, 228, 185, 0.6);
+  border: 1px solid rgba(122, 74, 26, 0.3);
+  outline: none;
+  padding: 6px 10px;
+  font-family: 'Uncial Antiqua', serif;
+  font-size: 18px;
+  color: #3b1f0a;
+  letter-spacing: 2px;
+}
+
+/* ============================================================
+   v2 — УЗЫ (новый блок)
+   ============================================================ */
+.v2-app .v2-bonds-block {
+  position: relative;
+  flex-shrink: 0;
+  padding: 16px 56px 0 0;
+  margin-top: 8px;
+}
+
+.v2-app .v2-bonds-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+  width: 100%;
+}
+
+.v2-app .v2-bonds-header svg {
+  color: #8b6914;
+  flex-shrink: 0;
+}
+
+.v2-app .v2-bonds-header span {
+  font-family: 'Uncial Antiqua', 'Cormorant Garamond', serif;
+  font-size: 26px;
+  color: #8b6914;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+}
+
+.v2-app .v2-bonds-textarea {
+  width: 100%;
+  min-height: 180px;
+  background: rgba(245, 228, 185, 0.4);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 47px,
+    rgba(122, 74, 26, 0.12) 47px,
+    rgba(122, 74, 26, 0.12) 48px
+  );
+  border: 1px dashed rgba(122, 74, 26, 0.3);
+  outline: none;
+  resize: none;
+  font-family: 'Philosopher', serif;
+  font-size: 26px;
+  color: #2a1206;
+  line-height: 48px;
+  padding: 0 14px;
+  overflow: hidden;
+  font-style: normal;
+}
+
+.v2-app .v2-bonds-textarea::placeholder {
+  color: rgba(42, 18, 6, 0.35);
+  font-style: italic;
+}
+
+/* ============================================================
+   v2 — Заголовок секции (викторианский стиль)
+   ============================================================ */
+.v2-app .history-header svg text {
+  font-size: 30px;
+}
+
+/* ============================================================
+   v2 — Кастомная тема (класс custom-theme висит на #sheet)
+   ============================================================ */
+body.v2-app #sheet.custom-theme .v2-reputation-title,
+body.v2-app #sheet.custom-theme .v2-status-title,
+body.v2-app #sheet.custom-theme .v2-sigil-title,
+body.v2-app #sheet.custom-theme .v2-bonds-header span,
+body.v2-app #sheet.custom-theme .v2-reputation-label,
+body.v2-app #sheet.custom-theme .v2-status-display-label {
+  color: var(--theme-label-color) !important;
+}
+
+body.v2-app #sheet.custom-theme .v2-motto-input,
+body.v2-app #sheet.custom-theme .v2-bonds-textarea {
+  color: var(--theme-input-color) !important;
+}
+
+body.v2-app #sheet.custom-theme .v2-motto-quote,
+body.v2-app #sheet.custom-theme .v2-bonds-header svg {
+  color: var(--theme-icon-color) !important;
+}
+
+body.v2-app #sheet.custom-theme .v2-reputation-bar,
+body.v2-app #sheet.custom-theme .v2-sigil-preview {
+  border-color: var(--theme-border-color) !important;
+}
+
+/* ============================================================
+   v2 — Адаптация v1-блоков к новому стилю
+   ============================================================ */
+.v2-app .erythrogen-title {
+  color: #8b0000;
+}
+
+.v2-app .rank-badge {
+  border-color: #8b0000;
+}
+
+.v2-app .rank-letter {
+  color: #8b0000;
+}
+
+/* Скрываем дефолтный бейдж роли v1 (в v2 печать своя) */
+.v2-app #role-badge-sheet {
+  /* Переопределяем стандартный, чтобы не дублировался */
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Кнопка экспорта в стиле v2 */
+.v2-app #export-btn {
+  background: linear-gradient(135deg, #3b1f0a, #5a2e0e);
+  border: 2px solid #8b6914;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.v2-app #export-btn:hover {
+  background: linear-gradient(135deg, #5a2e0e, #7a3e1a);
+  border-color: #d4a96a;
+}
+
+
+/* ============================================================
+   v2 — ПЕЧАТЬ (запасной вариант для Ctrl+P; основная печать —
+   кнопка «🖨 Печать», которая печатает точный PNG анкеты)
+   ============================================================ */
+@media print {
+  body.v2-app {
+    background: #fff !important;
+  }
+  body.v2-app #control-panel,
+  body.v2-app .modal-overlay,
+  body.v2-app #toast,
+  body.v2-app .ui-only,
+  body.v2-app .portrait-hint,
+  body.v2-app #portrait-actions,
+  body.v2-app #sheet-resize-handle,
+  body.v2-app #sheet-resize-x,
+  body.v2-app .portrait-resize-x,
+  body.v2-app .portrait-resize-y {
+    display: none !important;
+  }
+  body.v2-app #canvas-area {
+    position: static !important;
+    overflow: visible !important;
+    cursor: default;
+  }
+  body.v2-app #sheet {
+    position: static !important;
+    transform: none !important;
+    margin: 0 auto;
+    box-shadow: none;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  body.v2-app .v2-motto-input,
+  body.v2-app .v2-bonds-textarea,
+  body.v2-app .field-input,
+  body.v2-app .history-textarea {
+    border: none !important;
+  }
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+}
