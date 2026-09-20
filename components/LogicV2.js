@@ -1,7 +1,9 @@
-// FILE: components/Logic.js
+// FILE: components/LogicV2.js
+// Логика нового (второго) дизайна анкеты — Victorian/фэнтези стиль
+// Полностью независимый модуль, не трогает Logic.js (старый дизайн)
 "use strict";
+
 import Sortable from "sortablejs";
-import { FIELD_ICONS } from "./Icons";
 import { getSupabase } from "../lib/supabase";
 import {
   uploadImageToCloudinary,
@@ -9,17 +11,19 @@ import {
 } from "../lib/cloudinary";
 import {
   generateThemeFromColor,
-  getDefaultTheme,
   applyThemeToElement,
 } from "../lib/colorUtils";
-
-const getDb = () => getSupabase();
-
-const TEMP_KEY = "charSheet_temp_v12";
-const DEFAULT_SW = 2000,
-  DEFAULT_SH = 4000,
-  DEFAULT_PW = 860,
-  DEFAULT_PH = 3000;
+import {
+  TEMP_KEY,
+  TRANSFER_KEY,
+  readLocalMirror,
+} from "../lib/transfer";
+// TEMP_KEY общий со старым дизайном: любая анкета из галереи автоматически
+// перестраивается под новый дизайн. TRANSFER_KEY — зеркало для новой вкладки.
+const DEFAULT_SW = 1880,
+  DEFAULT_SH = 2400,
+  DEFAULT_PW = 720,
+  DEFAULT_PH = 1100;
 const MIN_SW = 1200,
   MIN_SH = 1400,
   MIN_PW = 300,
@@ -64,6 +68,11 @@ const HIDEABLE = {
   erythrogen: "Уровень Эритрогенов",
   "divider-ery": "Разделитель (эритрогены)",
   history: "История",
+  motto: "Девиз",
+  reputation: "Репутация",
+  status: "Статус",
+  bonds: "Узы",
+  sigil: "Символ рода",
 };
 
 let _initialized = false;
@@ -77,6 +86,8 @@ let _dualInitialized = false;
 let _buttonsInitialized = false;
 let _addFieldInitialized = false;
 let _dividerInitialized = false;
+let _statusInitialized = false;
+let _reputationInitialized = false;
 
 const ROLE_DISPLAY_NAMES = {
   "": "Стандартная",
@@ -93,25 +104,6 @@ const ROLE_DISPLAY_NAMES = {
   "role-background": "Фоновый",
   "role-neutral": "Нейтральный",
 };
-
-function updateRoleBadge() {
-  const textEl = $("role-badge-text");
-  const badgeEl = $("role-badge-sheet");
-  if (!textEl || !badgeEl) return;
-
-  // Если есть кастомный текст — используем его, иначе автоматический
-  if (S.roleBadgeCustomText) {
-    textEl.textContent = S.roleBadgeCustomText;
-  } else {
-    textEl.textContent = ROLE_DISPLAY_NAMES[S.role || ""] || "Стандартная";
-  }
-  badgeEl.style.display = "flex";
-
-  // Размер бейджика
-  if (S.roleBadgeFontSize) {
-    textEl.style.fontSize = S.roleBadgeFontSize + "px";
-  }
-}
 
 const S = {
   scale: 1,
@@ -173,19 +165,16 @@ const S = {
   fieldOrder2: [],
   role: "",
   fieldOrder: [],
-  labelFontSize: 26,
-  inputFontSize: 42,
-  nameFontSize: 80,
+  labelFontSize: 22,
+  inputFontSize: 30,
+  nameFontSize: 70,
   eryFontSize: 64,
-  rankNameFontSize: 32,
-  rankRangeFontSize: 26,
+  rankNameFontSize: 26,
+  rankRangeFontSize: 22,
   eryHintVisible: true,
   currentCharacterId: null,
   autoSaveTimer: null,
   _savedFields: {},
-  _sortable: null,
-  _sortable2: null,
-  _fieldsRendered: false,
   customColor: "",
   theme: null,
   dualMode: false,
@@ -205,7 +194,19 @@ const S = {
   _savedFields2: {},
   // Бейджик роли
   roleBadgeCustomText: "",
-  roleBadgeFontSize: 24,
+  roleBadgeFontSize: 22,
+  // ===== Новые фичи для v2 =====
+  motto: "",                  // Девиз / цитата персонажа
+  status: "alive",            // alive / deceased / missing / unknown
+  reputation: "neutral",      // glorious / noble / neutral / shady / notorious
+  bonds: "",                  // Узы / связи (textarea)
+  sigilColor: "#8b1a1a",      // Цвет печати рода
+  sigilText: "",              // Буква/символ на печати рода
+  duoName: "",                // Имя второго персонажа (для duo, без UI в v2)
+  _sortable: null,
+  _bondsInit: false,
+  _sigilInit: false,
+  _duoToastShown: false,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -223,10 +224,6 @@ let sheet,
   roleSelect,
   fieldsList;
 
-// ============================================================
-// INIT
-// ============================================================
-
 export function initApp() {
   sheet = $("sheet");
   canvasArea = $("canvas-area");
@@ -242,32 +239,29 @@ export function initApp() {
   roleSelect = $("role-select");
   fieldsList = $("fields-list");
 
-  const required = [
-    sheet,
-    canvasArea,
-    zoomLabel,
-    bgLayer,
-    portArea,
-    portWrapper,
-    portImg,
-    portPH,
-    portHint,
-    portColEl,
-    resizeHandle,
-    roleSelect,
-    fieldsList,
-  ];
-
-  if (required.some((x) => !x)) {
-    console.warn("initApp: DOM ещё не готов");
+  if (
+    !sheet ||
+    !canvasArea ||
+    !zoomLabel ||
+    !bgLayer ||
+    !portArea ||
+    !portWrapper ||
+    !portImg ||
+    !portPH ||
+    !portHint ||
+    !portColEl ||
+    !resizeHandle ||
+    !roleSelect ||
+    !fieldsList
+  ) {
+    console.warn("initApp v2: DOM ещё не готов");
     _initialized = false;
     return;
   }
-
   if (_initialized) return;
   _initialized = true;
 
-  loadState();
+  const hadLocalData = loadState();
   applySheetSize();
   applyPortraitSize();
   applyFontSizes();
@@ -295,15 +289,26 @@ export function initApp() {
   initDualModeToggle();
   initRoleBadgeEditor();
 
+  // ===== Новые инициализаторы v2 =====
+  initMotto();
+  initStatusSelector();
+  initReputationSelector();
+
   restoreAll();
-  // Применяем dual mode после восстановления всех данных
-  if (S.dualMode) {
-    applyDualMode();
-  }
   initDragAndDrop();
+  // Применяем значения новых полей после восстановления
+  applyStatusToUI();
+  applyReputationToUI();
 
   startAutoSave();
   updateRoleBadge();
+
+  // Если открыли в новой вкладке по прямой ссылке /v2?id=... и хранилища
+  // пустые — подтягиваем анкету из Supabase (авто-перестроение под v2).
+  if (!hadLocalData) {
+    const urlId = new URLSearchParams(window.location.search).get("id");
+    if (urlId) fetchCharacterById(urlId);
+  }
 }
 
 export function resetAppInit() {
@@ -318,76 +323,84 @@ export function resetAppInit() {
   _buttonsInitialized = false;
   _addFieldInitialized = false;
   _dividerInitialized = false;
+  _statusInitialized = false;
+  _reputationInitialized = false;
 
   if (S.autoSaveTimer) {
     clearInterval(S.autoSaveTimer);
     S.autoSaveTimer = null;
   }
-
   if (S._sortable) {
-    S._sortable.destroy();
+    try {
+      S._sortable.destroy();
+    } catch {}
     S._sortable = null;
   }
-  if (S._sortable2) {
-    S._sortable2.destroy();
-    S._sortable2 = null;
-  }
+  S._bondsInit = false;
+  S._sigilInit = false;
+  S._duoToastShown = false;
 }
 
 // ============================================================
-// AUTOSAVE / TEMP STATE
+// AUTOSAVE
 // ============================================================
-
 function startAutoSave() {
   if (S.autoSaveTimer) clearInterval(S.autoSaveTimer);
   S.autoSaveTimer = setInterval(() => saveTempState(), AUTOSAVE_INTERVAL);
 }
-
 function saveTempState() {
   try {
-    sessionStorage.setItem(TEMP_KEY, JSON.stringify(collectState()));
+    const raw = JSON.stringify(collectState());
+    sessionStorage.setItem(TEMP_KEY, raw);
+    // Зеркало для открытия в новой вкладке
+    try {
+      localStorage.setItem(
+        TRANSFER_KEY,
+        JSON.stringify({ ts: Date.now(), payload: raw }),
+      );
+    } catch {}
   } catch {}
 }
 
 // ============================================================
 // COLLECT STATE
 // ============================================================
-
 function collectState() {
+  // Подхватываем кастомные поля
   fieldsList?.querySelectorAll(".custom-field-row").forEach((row) => {
     const id = row.dataset.fieldId;
     const inp = row.querySelector("input,textarea");
     const cf = S.customFields.find((f) => f.id === id);
     if (cf && inp) cf.value = inp.value;
   });
-  const rightList = $("fields-list-right");
-  if (rightList && S.dualMode) {
-    rightList.querySelectorAll(".custom-field-row").forEach((row) => {
-      const id = row.dataset.fieldId;
-      const inp = row.querySelector("input,textarea");
-      const cf = S.customFields2.find((f) => f.id === id);
-      if (cf && inp) cf.value = inp.value;
-    });
-  }
+  // Подхватываем девиз и узы напрямую из textarea (на случай рассинхрона)
+  const mottoEl = $("v2-motto-input");
+  if (mottoEl) S.motto = mottoEl.value;
+  const bondsEl = $("v2-bonds-input");
+  if (bondsEl) S.bonds = bondsEl.value;
   updateFieldOrder();
 
   return {
+    // design_version = 2 — маркер: последнее сохранение было из нового дизайна
+    design_version: 2,
     sheetW: S.sheetW,
     sheetH: S.sheetH,
     portW: S.portW,
     portH: S.portH,
     fields: getFieldValues(),
-    fields2: S.dualMode ? getDualFieldValues() : {},
+    // Duo-данные в v2 не редактируются, но бережно сохраняются как есть,
+    // чтобы ничего не потерять при открытии двойной анкеты в новом дизайне.
+    fields2: S._savedFields2 || {},
     hidden: [...S.hiddenFields],
-    hidden2: S.dualMode ? [...S.hiddenFields2] : [],
+    hidden2: [...S.hiddenFields2],
     customFields: S.customFields.map((f) => ({ ...f })),
-    customFields2: S.dualMode ? S.customFields2.map((f) => ({ ...f })) : [],
+    customFields2: S.customFields2.map((f) => ({ ...f })),
     customCounter: S.customCounter,
     dividerCounter: S.dividerCounter,
     role: S.role,
     customColor: S.customColor,
     fieldOrder: S.fieldOrder,
-    fieldOrder2: S.dualMode ? getFieldOrder2() : [],
+    fieldOrder2: S.fieldOrder2 || [],
     labelFontSize: S.labelFontSize,
     inputFontSize: S.inputFontSize,
     nameFontSize: S.nameFontSize,
@@ -399,8 +412,14 @@ function collectState() {
     currentCharacterId: S.currentCharacterId,
     roleBadgeCustomText: S.roleBadgeCustomText,
     roleBadgeFontSize: S.roleBadgeFontSize,
-    // v2-совместимость: возвращаем поля нового дизайна без изменений
-    ...(S._v2extra || {}),
+    // Новые поля v2
+    motto: S.motto,
+    status: S.status,
+    reputation: S.reputation,
+    bonds: S.bonds,
+    sigilColor: S.sigilColor,
+    sigilText: S.sigilText,
+    duoName: S.duoName,
     port: {
       src: S.port.src,
       x: S.port.x,
@@ -420,94 +439,192 @@ function collectState() {
   };
 }
 
-function getFieldOrder2() {
-  const rl = $("fields-list-right");
-  return rl
-    ? Array.from(rl.children)
-        .map((el) => el.dataset.fieldId)
-        .filter(Boolean)
-    : [];
+// ============================================================
+// INIT: MOTTO
+// ============================================================
+function initMotto() {
+  const inp = $("v2-motto-input");
+  if (!inp) return;
+  if (S.motto) inp.value = S.motto;
+  inp.addEventListener("input", () => {
+    S.motto = inp.value;
+  });
+  inp.addEventListener("change", () => {
+    S.motto = inp.value;
+    saveTempState();
+  });
 }
 
 // ============================================================
-// DRAG & DROP
+// INIT: STATUS SELECTOR (Жив / Мёртв / Пропал / Неизвестно)
 // ============================================================
-
-function initDragAndDrop() {
-  if (!fieldsList) return;
-
-  // Левая колонка (или единственная в одиночном режиме)
-  if (S._sortable) {
-    S._sortable.destroy();
-    S._sortable = null;
+function initStatusSelector() {
+  if (_statusInitialized) return;
+  _statusInitialized = true;
+  const wrap = $("v2-status-selector");
+  if (!wrap) return;
+  wrap.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-status]");
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    S.status = btn.dataset.status;
+    applyStatusToUI();
+    saveTempState();
+    showToast(`Статус: ${btn.textContent.trim()}`);
+  });
+}
+const STATUS_MAP = {
+  alive: { icon: "✦", label: "Жив", cls: "st-alive" },
+  deceased: { icon: "✝", label: "Мёртв", cls: "st-deceased" },
+  missing: { icon: "◌", label: "Пропал", cls: "st-missing" },
+  unknown: { icon: "?", label: "Неизвестно", cls: "st-unknown" },
+};
+function applyStatusToUI() {
+  document
+    .querySelectorAll("#v2-status-selector button")
+    .forEach((b) =>
+      b.classList.toggle("active", b.dataset.status === S.status),
+    );
+  const m = STATUS_MAP[S.status] || STATUS_MAP.alive;
+  // Знак статуса в шапке (виден и в PNG)
+  const ic = $("v2-status-icon");
+  const lbl = $("v2-status-label");
+  if (ic && lbl) {
+    ic.textContent = m.icon;
+    lbl.textContent = m.label;
+    const badge = $("v2-status-badge");
+    if (badge) badge.className = "v2-status-badge " + m.cls;
   }
-  S._sortable = new Sortable(fieldsList, {
-    animation: 150,
-    handle: ".field-icon-wrap",
-    ghostClass: "sortable-ghost",
-    chosenClass: "sortable-chosen",
-    onEnd() {
-      updateFieldOrder();
-      saveTempState();
-    },
-  });
+  // Строка статуса в блоке «Состояние» (видна и в PNG)
+  const dic = $("v2-status-display-icon");
+  const dlbl = $("v2-status-display-label");
+  if (dic) dic.textContent = m.icon;
+  if (dlbl) dlbl.textContent = m.label;
+  const disp = $("v2-status-display");
+  if (disp) disp.className = "v2-status-display " + m.cls;
+}
 
-  // Правая колонка (только в dual mode)
-  const rightList = $("fields-list-right");
-  if (rightList) {
-    if (S._sortable2) {
-      S._sortable2.destroy();
-      S._sortable2 = null;
-    }
-    S._sortable2 = new Sortable(rightList, {
-      animation: 150,
-      handle: ".field-icon-wrap",
-      ghostClass: "sortable-ghost",
-      chosenClass: "sortable-chosen",
-      onEnd() {
-        updateFieldOrder2();
-        saveTempState();
-      },
-    });
+// ============================================================
+// INIT: REPUTATION SELECTOR (Слава / Честь / Нейтрал / Тень / Позор)
+// ============================================================
+function initReputationSelector() {
+  if (_reputationInitialized) return;
+  _reputationInitialized = true;
+  const wrap = $("v2-reputation-selector");
+  if (!wrap) return;
+  wrap.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-rep]");
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    S.reputation = btn.dataset.rep;
+    applyReputationToUI();
+    saveTempState();
+    showToast(`Репутация: ${btn.title || btn.dataset.rep}`);
+  });
+}
+function applyReputationToUI() {
+  document
+    .querySelectorAll("#v2-reputation-selector button")
+    .forEach((b) =>
+      b.classList.toggle("active", b.dataset.rep === S.reputation),
+    );
+  const bar = $("v2-reputation-bar");
+  if (bar) {
+    const map = {
+      glorious: { fill: 100, cls: "rep-glorious", label: "Славный" },
+      noble: { fill: 75, cls: "rep-noble", label: "Благородный" },
+      neutral: { fill: 50, cls: "rep-neutral", label: "Нейтральный" },
+      shady: { fill: 30, cls: "rep-shady", label: "Сомнительный" },
+      notorious: { fill: 10, cls: "rep-notorious", label: "Позорный" },
+    };
+    const m = map[S.reputation] || map.neutral;
+    bar.className = "v2-reputation-bar " + m.cls;
+    const fill = bar.querySelector(".v2-reputation-fill");
+    if (fill) fill.style.width = m.fill + "%";
+    const lbl = $("v2-reputation-label");
+    if (lbl) lbl.textContent = m.label;
   }
 }
 
-function updateFieldOrder() {
-  if (!fieldsList) return;
-  S.fieldOrder = Array.from(fieldsList.children)
-    .map((el) => el.dataset.fieldId)
-    .filter(Boolean);
-}
-
-function updateFieldOrder2() {
-  const rightList = $("fields-list-right");
-  if (!rightList) return;
-  S.fieldOrder2 = Array.from(rightList.children)
-    .map((el) => el.dataset.fieldId)
-    .filter(Boolean);
-}
-
-function applyFieldOrder() {
-  if (!S.fieldOrder?.length || !fieldsList) return;
-  S.fieldOrder.forEach((id) => {
-    const el = fieldsList.querySelector(`[data-field-id="${id}"]`);
-    if (el) fieldsList.appendChild(el);
+// ============================================================
+// INIT: BONDS (textarea)
+// ============================================================
+function initBonds() {
+  if (S._bondsInit) return;
+  S._bondsInit = true;
+  const ta = $("v2-bonds-input");
+  if (!ta) return;
+  // restoreAll уже подставил значение из fields; S.bonds — запасной источник
+  if (!ta.value && S.bonds) ta.value = S.bonds;
+  S.bonds = ta.value || "";
+  ta.addEventListener("input", () => {
+    S.bonds = ta.value;
+  });
+  ta.addEventListener("change", () => {
+    S.bonds = ta.value;
+    saveTempState();
   });
 }
 
-function applyFieldOrder2() {
-  const rightList = $("fields-list-right");
-  if (!S.fieldOrder2?.length || !rightList) return;
-  S.fieldOrder2.forEach((id) => {
-    const el = rightList.querySelector(`[data-field-id="${id}"]`);
-    if (el) rightList.appendChild(el);
+// ============================================================
+// INIT: SIGIL (печатка рода: цвет + буква/символ)
+// ============================================================
+function initSigil() {
+  if (S._sigilInit) return;
+  S._sigilInit = true;
+  const cp = $("v2-sigil-color");
+  const tx = $("v2-sigil-text");
+  if (!cp || !tx) return;
+  if (S.sigilColor) {
+    try {
+      cp.value = S.sigilColor;
+    } catch {}
+  }
+  if (S.sigilText) tx.value = S.sigilText;
+  cp.addEventListener("input", () => {
+    S.sigilColor = cp.value;
+    applySigilPreview();
+    saveTempState();
   });
+  tx.addEventListener("input", () => {
+    S.sigilText = tx.value.trim();
+    applySigilPreview();
+  });
+  tx.addEventListener("change", () => {
+    S.sigilText = tx.value.trim();
+    applySigilPreview();
+    saveTempState();
+  });
+  applySigilPreview();
+}
+function applySigilPreview() {
+  const prev = $("v2-sigil-preview");
+  const lbl = $("v2-sigil-preview-label");
+  if (!prev) return;
+  const color =
+    S.sigilColor && S.sigilColor.startsWith("#") ? S.sigilColor : "#8b1a1a";
+  prev.style.background = `radial-gradient(circle at 30% 30%, ${color} 0%, ${shade(color, -25)} 70%, ${shade(color, -45)} 100%)`;
+  prev.style.border = "none";
+  if (lbl) lbl.textContent = (S.sigilText || "✦").slice(0, 6);
+}
+function shade(hex, percent) {
+  hex = hex.replace("#", "");
+  if (hex.length === 3)
+    hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  const f = percent / 100;
+  const adjust = (c) =>
+    Math.max(0, Math.min(255, Math.round(c + (f < 0 ? c * f : (255 - c) * f))));
+  return `rgb(${adjust(r)},${adjust(g)},${adjust(b)})`;
 }
 
 // ============================================================
 // FONT SIZE CONTROLS
 // ============================================================
-
 function initFontSizeControls() {
   if (_fontInitialized) return;
   _fontInitialized = true;
@@ -543,7 +660,6 @@ function initFontSizeControls() {
     updateRoleBadge,
   );
 }
-
 function setupSlider(sliderId, valId, stateKey, extraCb) {
   const slider = $(sliderId);
   const valEl = $(valId);
@@ -557,7 +673,6 @@ function setupSlider(sliderId, valId, stateKey, extraCb) {
     if (extraCb) extraCb();
   });
 }
-
 function applyFontSizes() {
   const r = document.documentElement;
   r.style.setProperty("--name-font-size", S.nameFontSize + "px");
@@ -571,13 +686,11 @@ function applyFontSizes() {
 // ============================================================
 // ROLE BADGE EDITOR
 // ============================================================
-
 function initRoleBadgeEditor() {
   const textEl = $("role-badge-text");
   const editInput = $("role-badge-edit-input");
   if (!textEl || !editInput) return;
 
-  // Клик по бейджику — переключаемся на редактирование
   textEl.addEventListener("dblclick", (e) => {
     e.stopPropagation();
     editInput.value = textEl.textContent;
@@ -592,7 +705,10 @@ function initRoleBadgeEditor() {
     editInput.style.display = "none";
     textEl.style.display = "";
 
-    if (val && val !== (ROLE_DISPLAY_NAMES[S.role || ""] || "Стандартная")) {
+    if (
+      val &&
+      val !== (ROLE_DISPLAY_NAMES[S.role || ""] || "Стандартная")
+    ) {
       S.roleBadgeCustomText = val;
     } else {
       S.roleBadgeCustomText = "";
@@ -617,7 +733,6 @@ function initRoleBadgeEditor() {
 // ============================================================
 // CUSTOM COLOR
 // ============================================================
-
 function applyCustomColor() {
   if (S.customColor) {
     S.theme = generateThemeFromColor(S.customColor);
@@ -658,44 +773,73 @@ function applyCustomColor() {
 }
 
 // ============================================================
-// SIZES & VIEW
+// FIELD ICONS (статичные поля) + DRAG&DROP порядок полей
 // ============================================================
-
 function injectFieldIcons() {
   document.querySelectorAll(".field-icon-wrap[data-icon]").forEach((el) => {
-    const k = el.dataset.icon;
-    if (FIELD_ICONS[k]) el.innerHTML = FIELD_ICONS[k];
+    if (el.innerHTML.trim()) return;
+    el.innerHTML = getIconForField(el.dataset.icon);
   });
 }
 
+function initDragAndDrop() {
+  if (!fieldsList) return;
+  if (S._sortable) {
+    try {
+      S._sortable.destroy();
+    } catch {}
+    S._sortable = null;
+  }
+  try {
+    S._sortable = new Sortable(fieldsList, {
+      animation: 150,
+      handle: ".field-icon-wrap",
+      ghostClass: "sortable-ghost",
+      chosenClass: "sortable-chosen",
+      onEnd() {
+        updateFieldOrder();
+        saveTempState();
+      },
+    });
+  } catch (e) {
+    console.warn("v2 Sortable error:", e);
+  }
+}
+
+function updateFieldOrder() {
+  if (!fieldsList) return;
+  S.fieldOrder = Array.from(fieldsList.children)
+    .map((el) => el.dataset.fieldId)
+    .filter(Boolean);
+}
+
+function applyFieldOrder() {
+  if (!S.fieldOrder?.length || !fieldsList) return;
+  S.fieldOrder.forEach((id) => {
+    const el = fieldsList.querySelector(`[data-field-id="${id}"]`);
+    if (el) fieldsList.appendChild(el);
+  });
+}
+
+// ============================================================
+// SIZES & VIEW
+// ============================================================
 function applySheetSize() {
   sheet.style.width = S.sheetW + "px";
   sheet.style.height = S.sheetH + "px";
 }
-
 function applyPortraitSize() {
   portColEl.style.width = S.portW + "px";
   portArea.style.height = S.portH + "px";
-  if (S.dualMode) {
-    const grid = $("main-grid");
-    const scrollWrap = $("scroll-wrap");
-
-    // Синхронизируем обе сетки: контент и шапку
-    if (grid) grid.style.gridTemplateColumns = `1fr ${S.portW}px 1fr`;
-    if (scrollWrap)
-      scrollWrap.style.gridTemplateColumns = `1fr ${S.portW}px 1fr`;
-  }
 }
-
 function applyView() {
   sheet.style.transform = `translate(${S.tx}px,${S.ty}px) scale(${S.scale})`;
   zoomLabel.textContent = Math.round(S.scale * 100) + "%";
 }
-
 function fitToScreen() {
   const vw = canvasArea.clientWidth,
     vh = canvasArea.clientHeight;
-  const sc = Math.min(vw / S.sheetW, vh / S.sheetH) * 0.88;
+  const sc = Math.min(vw / S.sheetW, vh / S.sheetH) * 0.9;
   S.scale = sc;
   S.tx = (vw - S.sheetW * sc) / 2;
   S.ty = (vh - S.sheetH * sc) / 2;
@@ -705,7 +849,6 @@ function fitToScreen() {
 // ============================================================
 // PAN & ZOOM
 // ============================================================
-
 function initPan() {
   canvasArea.addEventListener("mousedown", (e) => {
     if (e.target.closest("#sheet")) return;
@@ -731,6 +874,7 @@ function initPan() {
     (e) => {
       if (
         e.target.closest(".portrait-area") ||
+        e.target.closest(".portrait-medallion") ||
         e.target.closest("#sheet-bg-layer")
       )
         return;
@@ -750,7 +894,6 @@ function initPan() {
     { passive: false },
   );
 }
-
 function initZoom() {
   if (_zoomInitialized) return;
   _zoomInitialized = true;
@@ -758,7 +901,6 @@ function initZoom() {
   $("zoom-out-btn").addEventListener("click", () => zoomC(0.84));
   $("zoom-fit-btn").addEventListener("click", fitToScreen);
 }
-
 function zoomC(f) {
   const cx = canvasArea.clientWidth / 2,
     cy = canvasArea.clientHeight / 2;
@@ -774,7 +916,6 @@ function zoomC(f) {
 // ============================================================
 // PORTRAIT
 // ============================================================
-
 function initPortrait() {
   const input = $("portrait-input");
   portArea.addEventListener("click", (e) => {
@@ -883,7 +1024,6 @@ function initPortraitButtons() {
   };
   updatePortraitButtonsVisibility();
 }
-
 function updatePortraitButtonsVisibility() {
   const a = $("portrait-actions");
   if (!a) return;
@@ -996,7 +1136,6 @@ function applyPortTransform() {
 // ============================================================
 // BACKGROUND
 // ============================================================
-
 function initBackground() {
   $("bg-btn").addEventListener("click", () => $("bg-input").click());
   $("bg-input").addEventListener("change", (e) => {
@@ -1067,9 +1206,8 @@ function applyBgTransform() {
 }
 
 // ============================================================
-// RESIZE — ВЫСОТА ЛИСТА
+// RESIZE
 // ============================================================
-
 function initSheetResize() {
   resizeHandle.addEventListener("mousedown", (e) => {
     e.stopPropagation();
@@ -1095,11 +1233,6 @@ function initSheetResize() {
     }
   });
 }
-
-// ============================================================
-// RESIZE — ШИРИНА ЛИСТА
-// ============================================================
-
 function initSheetResizeX() {
   const handle = $("sheet-resize-x");
   if (!handle) return;
@@ -1127,11 +1260,6 @@ function initSheetResizeX() {
     }
   });
 }
-
-// ============================================================
-// RESIZE — ПОРТРЕТ
-// ============================================================
-
 function initPortraitResizeX() {
   const h = $("portrait-resize-x");
   if (!h) return;
@@ -1161,7 +1289,6 @@ function initPortraitResizeX() {
     }
   });
 }
-
 function initPortraitResizeY() {
   $("portrait-resize-y").addEventListener("mousedown", (e) => {
     e.stopPropagation();
@@ -1191,7 +1318,6 @@ function initPortraitResizeY() {
 // ============================================================
 // ERYTHROGEN
 // ============================================================
-
 function initErythrogen() {
   const inp = $("erythrogen-value"),
     badge = $("rank-badge"),
@@ -1200,6 +1326,7 @@ function initErythrogen() {
     range = $("rank-range"),
     info = $("rank-info-inline"),
     tog = $("ery-hint-toggle");
+  if (!inp) return;
   function upd() {
     const m = inp.value.trim().match(/^\d+/);
     const v = m ? parseInt(m[0], 10) : NaN;
@@ -1233,50 +1360,9 @@ function initErythrogen() {
   }
 }
 
-function initErythrogenRight() {
-  const inp = $("erythrogen-value-right");
-  if (!inp) return;
-  const badge = $("rank-badge-right"),
-    ltr = $("rank-letter-right"),
-    name = $("rank-name-right"),
-    range = $("rank-range-right"),
-    info = $("rank-info-inline-right"),
-    tog = $("ery-hint-toggle-right");
-  function upd() {
-    const m = inp.value.trim().match(/^\d+/);
-    const v = m ? parseInt(m[0], 10) : NaN;
-    if (isNaN(v) || inp.value.trim() === "") {
-      ltr.textContent = "—";
-      name.textContent = "";
-      range.textContent = "";
-      badge.className = "rank-badge";
-      return;
-    }
-    const r =
-      RANKS.slice()
-        .reverse()
-        .find((r) => v >= r.min) || RANKS[0];
-    ltr.textContent = r.letter;
-    name.textContent = r.name;
-    range.textContent = r.range + " ед.";
-    badge.className = `rank-badge ${r.cls}`;
-  }
-  inp.addEventListener("input", upd);
-  inp.addEventListener("change", () => saveTempState());
-  upd();
-  if (tog && info) {
-    tog.addEventListener("click", (e) => {
-      e.stopPropagation();
-      info.classList.toggle("hidden");
-      saveTempState();
-    });
-  }
-}
-
 // ============================================================
 // DELETE / HIDE / SHOW / RESTORE
 // ============================================================
-
 function initDeleteButtons() {
   if (_deleteInitialized) return;
   _deleteInitialized = true;
@@ -1286,21 +1372,13 @@ function initDeleteButtons() {
     e.stopPropagation();
     e.preventDefault();
     const target = btn.dataset.target;
-    const isR = btn.dataset.side === "right";
-    if (target) hideField(target, isR);
+    if (target) hideField(target);
   });
 }
-function hideField(id, isR = false) {
-  if (
-    id.startsWith("custom_") ||
-    id.startsWith("cdiv_") ||
-    id.startsWith("r-custom_") ||
-    id.startsWith("r-cdiv_")
-  ) {
+function hideField(id) {
+  if (id.startsWith("custom_") || id.startsWith("cdiv_")) {
     document.querySelector(`[data-field-id="${id}"]`)?.remove();
-    if (isR || id.startsWith("r-"))
-      S.customFields2 = S.customFields2.filter((f) => f.id !== id);
-    else S.customFields = S.customFields.filter((f) => f.id !== id);
+    S.customFields = S.customFields.filter((f) => f.id !== id);
     updateFieldOrder();
     saveTempState();
     return;
@@ -1308,10 +1386,9 @@ function hideField(id, isR = false) {
   const el = document.querySelector(`[data-field-id="${id}"]`);
   if (el) {
     el.style.display = "none";
-    if (isR) S.hiddenFields2.add(id);
-    else S.hiddenFields.add(id);
+    S.hiddenFields.add(id);
   }
-  if (id === "erythrogen" && !isR) {
+  if (id === "erythrogen") {
     const d = $("divider-ery");
     if (d) {
       d.style.display = "none";
@@ -1321,14 +1398,13 @@ function hideField(id, isR = false) {
   updateFieldOrder();
   saveTempState();
 }
-function showField(id, isR = false) {
+function showField(id) {
   const el = document.querySelector(`[data-field-id="${id}"]`);
   if (el) {
     el.style.display = "";
-    if (isR) S.hiddenFields2.delete(id);
-    else S.hiddenFields.delete(id);
+    S.hiddenFields.delete(id);
   }
-  if (id === "erythrogen" && !isR) {
+  if (id === "erythrogen") {
     const d = $("divider-ery");
     if (d) {
       d.style.display = "";
@@ -1377,7 +1453,6 @@ function initRestoreFields() {
 // ============================================================
 // ADD FIELD / DIVIDER
 // ============================================================
-
 function initAddField() {
   if (_addFieldInitialized) return;
   _addFieldInitialized = true;
@@ -1404,33 +1479,28 @@ function initAddField() {
     const fL = { id, label, type, icon, value: "" };
     S.customFields.push(fL);
     renderCustomField(fL);
-    if (S.dualMode) {
-      const idR = `r-custom_${S.customCounter}`;
-      const fR = { id: idR, label, type, icon, value: "" };
-      S.customFields2.push(fR);
-      const rl = $("fields-list-right");
-      if (rl) renderCustomField(fR, rl, true);
-    }
     $("new-field-label").value = "";
     modal.style.display = "none";
     updateFieldOrder();
     saveTempState();
   });
 }
-
-function renderCustomField(f, container = null, isR = false) {
+function renderCustomField(f, container = null) {
   const c = container || fieldsList;
   if (!c || c.querySelector(`[data-field-id="${f.id}"]`)) return;
   const w = document.createElement("div");
   w.className = "custom-field-row";
   w.dataset.fieldId = f.id;
-  const ic = FIELD_ICONS[f.icon] || FIELD_ICONS.scroll;
+
+  // Иконка — простой SVG по имени
+  const ic = getIconForField(f.icon);
   const inp =
     f.type === "textarea"
       ? `<textarea class="custom-field-textarea" placeholder="—" rows="2"></textarea>`
       : `<input type="text" class="field-input" placeholder="—" autocomplete="off"/>`;
-  const side = isR || f.id.startsWith("r-") ? ' data-side="right"' : "";
-  w.innerHTML = `<div class="field-delete-btn ui-only" data-target="${f.id}"${side} title="Удалить">✕</div><div class="field-icon-wrap">${ic}</div><div class="field-content"><span class="field-label">${esc(f.label)}</span>${inp}</div>`;
+  w.innerHTML = `<div class="field-delete-btn ui-only" data-target="${f.id}" title="Удалить">✕</div>
+    <div class="field-icon-wrap">${ic}</div>
+    <div class="field-content"><span class="field-label">${esc(f.label)}</span>${inp}</div>`;
   const el = w.querySelector("input,textarea");
   el.value = f.value || "";
   el.addEventListener("input", () => {
@@ -1441,6 +1511,159 @@ function renderCustomField(f, container = null, isR = false) {
     saveTempState();
   });
   c.appendChild(w);
+}
+
+function getIconForField(name) {
+  // Упрощённые inline-иконки (чтобы не зависеть от Icons.js старого дизайна)
+  const wrap = (svg) =>
+    `<svg class="ficon" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${svg}</svg>`;
+  const map = {
+    scroll: wrap(
+      `<rect x="8" y="6" width="20" height="24" rx="1.5"/><line x1="12" y1="13" x2="24" y2="13"/><line x1="12" y1="18" x2="24" y2="18"/><line x1="12" y1="23" x2="20" y2="23"/>`,
+    ),
+    sword: wrap(
+      `<line x1="8" y1="28" x2="28" y2="8"/><polyline points="22,8 28,8 28,14"/><line x1="8" y1="28" x2="13" y2="23"/><rect x="6" y="26" width="6" height="3" transform="rotate(-45 9 27.5)"/>`,
+    ),
+    shield: wrap(
+      `<path d="M18 5 L28 9 V20 Q28 26 18 31 Q8 26 8 20 V9 Z"/><path d="M14 18 L17 21 L23 14"/>`,
+    ),
+    flame: wrap(
+      `<path d="M18 30 Q12 24 14 18 Q14 12 18 6 Q22 12 22 18 Q24 24 18 30 Z"/><path d="M18 26 Q16 22 17 19 Q18 16 19 19 Q20 22 18 26"/>`,
+    ),
+    eye: wrap(
+      `<path d="M4 18 Q10 9 18 9 Q26 9 32 18 Q26 27 18 27 Q10 27 4 18 Z"/><circle cx="18" cy="18" r="4"/><circle cx="18" cy="18" r="1.2" fill="currentColor"/>`,
+    ),
+    heart: wrap(
+      `<path d="M18 30 C12 24 6 20 6 14 Q6 9 11 9 Q15 9 18 13 Q21 9 25 9 Q30 9 30 14 C30 20 24 24 18 30 Z"/>`,
+    ),
+    star: wrap(
+      `<polygon points="18,5 21,14 30,14 23,20 26,29 18,23 10,29 13,20 6,14 15,14"/>`,
+    ),
+    key: wrap(
+      `<circle cx="11" cy="18" r="5"/><line x1="15" y1="18" x2="30" y2="18"/><line x1="24" y1="18" x2="24" y2="22"/><line x1="28" y1="18" x2="28" y2="22"/>`,
+    ),
+    crystal: wrap(
+      `<polygon points="18,5 26,12 22,28 14,28 10,12"/><line x1="18" y1="5" x2="18" y2="28"/><line x1="10" y1="12" x2="26" y2="12"/>`,
+    ),
+    rune: wrap(
+      `<circle cx="18" cy="18" r="11"/><line x1="11" y1="18" x2="25" y2="18"/><line x1="18" y1="11" x2="18" y2="25"/><path d="M14 14 L22 22 M22 14 L14 22"/>`,
+    ),
+    hourglass: wrap(
+      `<path d="M9 6 H27 V12 Q27 18 18 18 Q27 18 27 24 V30 H9 V24 Q9 18 18 18 Q9 18 9 12 Z"/>`,
+    ),
+    moon: wrap(
+      `<path d="M24 6 Q14 8 14 18 Q14 28 24 30 Q18 28 18 18 Q18 8 24 6 Z"/>`,
+    ),
+    globe: wrap(
+      `<circle cx="18" cy="18" r="12"/><ellipse cx="18" cy="18" rx="6" ry="12"/><line x1="6" y1="18" x2="30" y2="18"/>`,
+    ),
+    tree: wrap(
+      `<path d="M18 30 V18 M18 18 Q10 16 10 10 Q14 8 18 12 Q22 8 26 10 Q26 16 18 18 M14 30 H22"/>`,
+    ),
+    mask: wrap(
+      `<path d="M6 12 Q18 4 30 12 V22 Q18 30 6 22 Z"/><circle cx="13" cy="16" r="1.6" fill="currentColor"/><circle cx="23" cy="16" r="1.6" fill="currentColor"/><path d="M13 22 Q18 25 23 22"/>`,
+    ),
+    quill: wrap(
+      `<path d="M28 6 Q18 8 12 18 L8 28 L18 24 Q28 18 28 6 Z"/><line x1="12" y1="18" x2="8" y2="28"/>`,
+    ),
+    height: wrap(
+      `<line x1="18" y1="6" x2="18" y2="30"/><path d="M14 10 L18 6 L22 10"/><path d="M14 26 L18 30 L22 26"/>`,
+    ),
+    origin: wrap(
+      `<circle cx="18" cy="18" r="10"/><circle cx="18" cy="18" r="3" fill="currentColor"/>`,
+    ),
+    age: wrap(
+      `<path d="M9 6 H27 V12 Q27 18 18 18 Q27 18 27 24 V30 H9 V24 Q9 18 18 18 Q9 18 9 12 Z"/>`,
+    ),
+    weight: wrap(
+      `<path d="M18 4 L6 12 L6 30 H30 V12 Z"/><line x1="14" y1="20" x2="22" y2="20"/>`,
+    ),
+    gender: wrap(
+      `<circle cx="14" cy="12" r="5"/><line x1="14" y1="17" x2="14" y2="30"/><line x1="9" y1="22" x2="14" y2="17"/><polyline points="22,10 30,10 30,18"/><line x1="26" y1="14" x2="30" y2="18"/>`,
+    ),
+    skills: wrap(
+      `<path d="M6 14 L18 6 L30 14 V28 H6 Z"/><line x1="12" y1="14" x2="12" y2="28"/><line x1="24" y1="14" x2="24" y2="28"/><line x1="6" y1="14" x2="30" y2="14"/>`,
+    ),
+    inventory: wrap(
+      `<rect x="6" y="14" width="24" height="16" rx="2"/><path d="M12 14 V8 Q12 6 14 6 H22 Q24 6 24 8 V14"/><line x1="18" y1="20" x2="18" y2="24"/>`,
+    ),
+    location: wrap(
+      `<path d="M18 30 Q8 22 8 14 Q8 6 18 6 Q28 6 28 14 Q28 22 18 30 Z"/><circle cx="18" cy="14" r="4"/>`,
+    ),
+    speech: wrap(
+      `<path d="M6 8 H30 V22 H22 L18 28 L14 22 H6 Z"/><circle cx="13" cy="15" r="1.2" fill="currentColor"/><circle cx="18" cy="15" r="1.2" fill="currentColor"/><circle cx="23" cy="15" r="1.2" fill="currentColor"/>`,
+    ),
+    status: wrap(
+      `<circle cx="18" cy="18" r="11"/><path d="M14 18 L17 21 L23 14"/>`,
+    ),
+    race: wrap(
+      `<path d="M6 30 Q6 16 18 14 Q30 16 30 30 Z"/><circle cx="14" cy="20" r="1.5" fill="currentColor"/><circle cx="22" cy="20" r="1.5" fill="currentColor"/>`,
+    ),
+    appearance: wrap(
+      `<circle cx="18" cy="12" r="6"/><path d="M6 30 Q6 20 18 20 Q30 20 30 30"/>`,
+    ),
+    title: wrap(
+      `<path d="M8 18 L18 8 L28 18 V30 H8 Z"/><line x1="13" y1="22" x2="23" y2="22"/>`,
+    ),
+    faction: wrap(
+      `<rect x="6" y="14" width="24" height="16"/><path d="M12 14 V8 L18 12 L24 8 V14"/><line x1="12" y1="20" x2="24" y2="20"/><line x1="12" y1="26" x2="24" y2="26"/>`,
+    ),
+    alignment: wrap(
+      `<line x1="18" y1="6" x2="18" y2="30"/><path d="M6 10 L18 14 L30 10"/><path d="M6 26 L18 22 L30 26"/>`,
+    ),
+    magic: wrap(
+      `<polygon points="18,4 21,14 31,14 23,21 26,31 18,25 10,31 13,21 5,14 15,14"/>`,
+    ),
+    companion: wrap(
+      `<circle cx="13" cy="13" r="4"/><circle cx="23" cy="13" r="4"/><path d="M5 28 Q5 19 13 19 Q21 19 21 28"/><path d="M15 28 Q15 19 23 19 Q31 19 31 28"/>`,
+    ),
+    faith: wrap(
+      `<path d="M18 6 L21 14 L29 14 L23 19 L25 27 L18 22 L11 27 L13 19 L7 14 L15 14 Z"/>`,
+    ),
+    bloodline: wrap(
+      `<circle cx="18" cy="10" r="3"/><path d="M12 30 V20 Q12 14 18 14 Q24 14 24 20 V30"/><line x1="14" y1="22" x2="22" y2="22"/>`,
+    ),
+    profession: wrap(
+      `<rect x="8" y="10" width="20" height="20"/><line x1="8" y1="16" x2="28" y2="16"/><line x1="14" y1="6" x2="22" y2="6"/>`,
+    ),
+    relations: wrap(
+      `<circle cx="10" cy="12" r="4"/><circle cx="26" cy="12" r="4"/><circle cx="18" cy="26" r="4"/><line x1="10" y1="16" x2="18" y2="22"/><line x1="26" y1="16" x2="18" y2="22"/><line x1="14" y1="12" x2="22" y2="12"/>`,
+    ),
+    voice: wrap(
+      `<path d="M10 12 Q10 6 18 6 Q26 6 26 12 V20 Q26 26 18 26 Q10 26 10 20 Z"/><line x1="18" y1="26" x2="18" y2="32"/><line x1="14" y1="32" x2="22" y2="32"/>`,
+    ),
+    death: wrap(
+      `<circle cx="18" cy="18" r="12"/><line x1="10" y1="10" x2="26" y2="26"/><line x1="26" y1="10" x2="10" y2="26"/>`,
+    ),
+    cause_death: wrap(
+      `<circle cx="18" cy="18" r="12"/><path d="M14 18 L17 21 L23 14"/>`,
+    ),
+    birthdate: wrap(
+      `<rect x="6" y="8" width="24" height="22" rx="2"/><line x1="6" y1="14" x2="30" y2="14"/><line x1="11" y1="6" x2="11" y2="12"/><line x1="25" y1="6" x2="25" y2="12"/>`,
+    ),
+    reputation: wrap(
+      `<polygon points="18,6 21,16 31,16 23,22 26,31 18,25 10,31 13,22 5,16 15,16"/>`,
+    ),
+    wounds: wrap(
+      `<path d="M6 18 L13 11 L18 16 L23 11 L30 18 L24 24 L30 30 L18 24 L6 30 L12 24 Z"/>`,
+    ),
+    homeland: wrap(
+      `<path d="M3 22 L18 8 L33 22 V30 H3 Z"/><rect x="14" y="22" width="8" height="8"/>`,
+    ),
+    persona: wrap(
+      `<circle cx="18" cy="18" r="12"/><path d="M12 16 Q18 12 24 16"/><circle cx="13" cy="20" r="1.2" fill="currentColor"/><circle cx="23" cy="20" r="1.2" fill="currentColor"/><path d="M14 24 Q18 27 22 24"/>`,
+    ),
+    enemy: wrap(
+      `<line x1="8" y1="8" x2="28" y2="28"/><line x1="28" y1="8" x2="8" y2="28"/><circle cx="18" cy="18" r="6"/>`,
+    ),
+    goal: wrap(
+      `<circle cx="18" cy="18" r="10"/><circle cx="18" cy="18" r="5"/><circle cx="18" cy="18" r="1.5" fill="currentColor"/>`,
+    ),
+    erythrogen: wrap(
+      `<path d="M8 18 Q8 8 18 6 Q28 8 28 18 Q28 28 18 30 Q8 28 8 18 Z"/><circle cx="18" cy="18" r="4" fill="currentColor"/>`,
+    ),
+  };
+  return map[name] || map.scroll;
 }
 
 function initAddDivider() {
@@ -1454,35 +1677,31 @@ function initAddDivider() {
     const dL = { id, type: "divider" };
     S.customFields.push(dL);
     renderCustomDivider(dL);
-    if (S.dualMode) {
-      const idR = `r-cdiv_${S.dividerCounter}`;
-      const dR = { id: idR, type: "divider" };
-      S.customFields2.push(dR);
-      const rl = $("fields-list-right");
-      if (rl) renderCustomDivider(dR, rl, true);
-    }
     updateFieldOrder();
     saveTempState();
   });
 }
-
-function renderCustomDivider(d, container = null, isR = false) {
+function renderCustomDivider(d, container = null) {
   const c = container || fieldsList;
   if (!c || c.querySelector(`[data-field-id="${d.id}"]`)) return;
   const w = document.createElement("div");
   w.className = "section-divider custom-divider";
   w.dataset.fieldId = d.id;
-  const side = isR || d.id.startsWith("r-") ? ' data-side="right"' : "";
-  w.innerHTML = `<div class="field-delete-btn ui-only" data-target="${d.id}"${side} title="Удалить">✕</div>
+  w.innerHTML = `<div class="field-delete-btn ui-only" data-target="${d.id}" title="Удалить">✕</div>
     <div class="field-icon-wrap divider-drag-handle ui-only" title="Перетащить"><svg class="ficon" viewBox="0 0 36 36"><line x1="8" y1="12" x2="28" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="8" y1="18" x2="28" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="8" y1="24" x2="28" y2="24" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
-    <svg class="divider-line-svg" width="100%" height="34" viewBox="0 0 800 34" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><line x1="0" y1="17" x2="355" y2="17" stroke="#7a4a1a" stroke-width="1.2"/><line x1="445" y1="17" x2="800" y2="17" stroke="#7a4a1a" stroke-width="1.2"/><path d="M355,17L372,7L400,17L372,27Z" fill="#9a6425" stroke="#7a4a1a" stroke-width=".8"/><path d="M445,17L428,7L400,17L428,27Z" fill="#9a6425" stroke="#7a4a1a" stroke-width=".8"/><circle cx="400" cy="17" r="4.5" fill="#7a4a1a"/></svg>`;
+    <svg class="divider-line-svg" width="100%" height="34" viewBox="0 0 800 34" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <line x1="0" y1="17" x2="340" y2="17" stroke="#7a4a1a" stroke-width="1.2"/>
+      <line x1="460" y1="17" x2="800" y2="17" stroke="#7a4a1a" stroke-width="1.2"/>
+      <path d="M340,17 L360,7 L395,17 L360,27 Z" fill="#9a6425" stroke="#7a4a1a" stroke-width=".8"/>
+      <path d="M460,17 L440,7 L405,17 L440,27 Z" fill="#9a6425" stroke="#7a4a1a" stroke-width=".8"/>
+      <circle cx="400" cy="17" r="5" fill="#7a4a1a"/>
+    </svg>`;
   c.appendChild(w);
 }
 
 // ============================================================
 // ROLES / COLOR PICKER
 // ============================================================
-
 function initRoles() {
   if (_rolesInitialized) return;
   _rolesInitialized = true;
@@ -1497,9 +1716,16 @@ function applyRole(role) {
     sheet.className = sheet.className.replace(/\brole-\S+/g, "").trim();
     if (role) sheet.classList.add(role);
   }
-  // Если нет кастомного текста — обновляем автоматически
-  if (!S.roleBadgeCustomText) updateRoleBadge();
-  else updateRoleBadge();
+  updateRoleBadge();
+}
+function updateRoleBadge() {
+  const textEl = $("role-badge-text");
+  const badgeEl = $("role-badge-sheet");
+  if (!textEl || !badgeEl) return;
+  if (S.roleBadgeCustomText) textEl.textContent = S.roleBadgeCustomText;
+  else textEl.textContent = ROLE_DISPLAY_NAMES[S.role || ""] || "Стандартная";
+  badgeEl.style.display = "flex";
+  if (S.roleBadgeFontSize) textEl.style.fontSize = S.roleBadgeFontSize + "px";
 }
 
 function initColorPicker() {
@@ -1523,197 +1749,113 @@ function initColorPicker() {
 }
 
 // ============================================================
-// DUAL MODE
+// DUAL MODE: в v2 двойные анкеты только ПРОСМАТРИВАЮТСЯ/сохраняются,
+// а редактирование второго персонажа — в старом дизайне.
+// Данные второго персонажа при этом не теряются (см. collectState).
 // ============================================================
-
 function initDualModeToggle() {
   if (_dualInitialized) return;
   _dualInitialized = true;
   const btn = $("dual-mode-btn");
   if (!btn) return;
   btn.addEventListener("click", () => {
-    S.dualMode = !S.dualMode;
-    applyDualMode();
-    saveTempState();
-    showToast(S.dualMode ? "Двойная анкета" : "Одиночная анкета");
+    if (S.dualMode) {
+      showToast("Двойная анкета: второй персонаж сохранится как есть");
+    } else {
+      showToast("Двойные анкеты создаются в старом дизайне (📜 Дизайн v1)");
+    }
   });
 }
 
 function applyDualMode() {
-  const btn = $("dual-mode-btn"),
-    scrollR = $("scroll-right"),
-    scrollC = $("scroll-center-ornament"),
-    svgS = $("scroll-svg-single"),
-    svgDL = $("scroll-svg-dual-left"),
-    grid = $("main-grid"),
-    scrollWrap = $("scroll-wrap");
-
-  if (S.dualMode) {
-    // Стартовая ширина не такая огромная
-    S.sheetW = Math.max(S.sheetW, 2800);
-    applySheetSize();
-    sheet.classList.add("dual-mode");
-
-    if (svgS) svgS.style.display = "none";
-    if (svgDL) svgDL.style.display = "block";
-    if (scrollR) scrollR.style.display = "flex";
-    if (scrollC) scrollC.style.display = "flex";
-
-    const infoCol = $("info-column"),
-      portCol = $("portrait-column");
-
-    if (grid && infoCol && portCol) {
-      grid.insertBefore(infoCol, portCol);
-      grid.style.gridTemplateColumns = `1fr ${S.portW}px 1fr`;
-    }
-    if (scrollWrap) {
-      scrollWrap.style.gridTemplateColumns = `1fr ${S.portW}px 1fr`;
-    }
-
-    let rc = $("info-column-right");
-    if (!rc) {
-      rc = document.createElement("div");
-      rc.id = "info-column-right";
-      rc.className = "info-column";
-      const rl = document.createElement("div");
-      rl.className = "fields-list";
-      rl.id = "fields-list-right";
-      rc.appendChild(rl);
-      if (portCol?.parentNode)
-        portCol.parentNode.insertBefore(rc, portCol.nextSibling);
-      else grid?.appendChild(rc);
-      createDualFields(rl);
-      Object.entries(S._savedFields2 || {}).forEach(([id, v]) => {
-        const e = $(id);
-        if (e) {
-          e.value = v;
-          e.dispatchEvent(new Event("input"));
-        }
-      });
-    } else {
-      rc.style.display = "";
-    }
-
-    initDragAndDrop();
-
-    if (btn) btn.textContent = "👤 Одиночная";
-    if (S.portW < 400) {
-      S.portW = 860;
-      applyPortraitSize();
-    }
-    fitToScreen();
-  } else {
-    S.sheetW = DEFAULT_SW;
-    applySheetSize();
-    sheet.classList.remove("dual-mode");
-
-    if (svgS) svgS.style.display = "block";
-    if (svgDL) svgDL.style.display = "none";
-    if (scrollR) scrollR.style.display = "none";
-    if (scrollC) scrollC.style.display = "none";
-
-    const rc = $("info-column-right");
-    if (rc) rc.style.display = "none";
-
-    if (grid) {
-      grid.style.gridTemplateColumns = "";
-      const infoCol = $("info-column"),
-        portCol = $("portrait-column");
-      if (portCol && infoCol) grid.insertBefore(portCol, infoCol);
-    }
-    if (scrollWrap) {
-      scrollWrap.style.gridTemplateColumns = "";
-    }
-
-    if (btn) btn.textContent = "👥 Двойная";
-    fitToScreen();
+  const btn = $("dual-mode-btn");
+  if (btn && S.dualMode) btn.textContent = "👥 Двойная ✓";
+  if (S.dualMode && !S._duoToastShown) {
+    S._duoToastShown = true;
+    setTimeout(
+      () => showToast("Двойная анкета: в v2 показан первый персонаж"),
+      600,
+    );
   }
-}
-
-function createDualFields(c) {
-  if (!c || c.children.length > 0) return;
-  [
-    { id: "r-age", icon: "hourglass", label: "Возраст", iid: "field-r-age" },
-    {
-      id: "r-birth",
-      icon: "moon",
-      label: "Дата рождения",
-      iid: "field-r-birth",
-    },
-    {
-      id: "r-nation",
-      icon: "globe",
-      label: "Национальность",
-      iid: "field-r-nation",
-    },
-    { id: "r-clan", icon: "tree", label: "Род / Клан", iid: "field-r-clan" },
-    {
-      id: "r-nature",
-      icon: "mask",
-      label: "Кем является",
-      iid: "field-r-nature",
-    },
-    {
-      id: "r-occupation",
-      icon: "quill",
-      label: "Чем занимается",
-      iid: "field-r-occupation",
-    },
-  ].forEach((f) => {
-    const r = document.createElement("div");
-    r.className = "field-row";
-    r.dataset.fieldId = f.id;
-    r.innerHTML = `<div class="field-delete-btn ui-only" data-target="${f.id}" data-side="right" title="Удалить">✕</div><div class="field-icon-wrap" data-icon="${f.icon}"></div><div class="field-content"><span class="field-label">${f.label}</span><input type="text" class="field-input" id="${f.iid}" placeholder="—" autocomplete="off"/></div>`;
-    c.appendChild(r);
-  });
-  // Разделитель
-  const dv = document.createElement("div");
-  dv.className = "section-divider";
-  dv.dataset.fieldId = "r-divider-ery";
-  dv.innerHTML = `<svg width="100%" height="34" viewBox="0 0 800 34" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><line x1="0" y1="17" x2="355" y2="17" stroke="#7a4a1a" stroke-width="1.2"/><line x1="445" y1="17" x2="800" y2="17" stroke="#7a4a1a" stroke-width="1.2"/><path d="M355,17L372,7L400,17L372,27Z" fill="#9a6425" stroke="#7a4a1a" stroke-width=".8"/><path d="M445,17L428,7L400,17L428,27Z" fill="#9a6425" stroke="#7a4a1a" stroke-width=".8"/><circle cx="400" cy="17" r="4.5" fill="#7a4a1a"/></svg>`;
-  c.appendChild(dv);
-  // Эритрогены
-  const eb = document.createElement("div");
-  eb.className = "erythrogen-block";
-  eb.dataset.fieldId = "r-erythrogen";
-  eb.innerHTML = `<div class="field-delete-btn ui-only" data-target="r-erythrogen" data-side="right" title="Удалить">✕</div><div class="erythrogen-header"><div class="field-icon-wrap" data-icon="erythrogen"></div><span class="erythrogen-title">Уровень Эритрогенов</span></div><div class="erythrogen-row"><div class="rank-badge" id="rank-badge-right"><span class="rank-letter" id="rank-letter-right">—</span></div><input type="text" id="erythrogen-value-right" class="ery-number-input" placeholder="0" autocomplete="off"/><span class="rank-info-inline" id="rank-info-inline-right"><span class="rank-dot"> · </span><span class="rank-name" id="rank-name-right">Введите значение</span><span class="rank-dot"> · </span><span class="rank-range" id="rank-range-right"></span></span><button class="ery-hint-toggle ui-only" id="ery-hint-toggle-right" title="Скрыть/показать">👁</button></div>`;
-  c.appendChild(eb);
-  // История
-  const hb = document.createElement("div");
-  hb.className = "history-block";
-  hb.dataset.fieldId = "r-history";
-  hb.innerHTML = `<div class="field-delete-btn ui-only" data-target="r-history" data-side="right" title="Удалить">✕</div><div class="history-header"><svg width="100%" height="48" viewBox="0 0 800 48" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><line x1="0" y1="24" x2="240" y2="24" stroke="#7a4a1a" stroke-width="1.5"/><path d="M240,24L260,11L295,24L260,37Z" fill="#9a6425" stroke="#7a4a1a" stroke-width="1"/><text x="400" y="33" font-family="'Uncial Antiqua',serif" font-size="32" fill="#3b1f0a" text-anchor="middle" letter-spacing="6">История</text><path d="M560,24L540,11L505,24L540,37Z" fill="#9a6425" stroke="#7a4a1a" stroke-width="1"/><line x1="560" y1="24" x2="800" y2="24" stroke="#7a4a1a" stroke-width="1.5"/></svg></div><textarea class="history-textarea" id="field-r-history" placeholder="История второго персонажа..."></textarea>`;
-  c.appendChild(hb);
-  c.querySelectorAll(".field-icon-wrap[data-icon]").forEach((el) => {
-    const k = el.dataset.icon;
-    if (FIELD_ICONS[k]) el.innerHTML = FIELD_ICONS[k];
-  });
-  initErythrogenRight();
 }
 
 // ============================================================
 // BUTTONS
 // ============================================================
-
 function initButtons() {
   if (_buttonsInitialized) return;
   _buttonsInitialized = true;
   $("cloud-save-btn").addEventListener("click", saveToCloud);
   $("new-char-btn").addEventListener("click", () => {
     if (confirm("Создать нового?")) {
-      sessionStorage.removeItem(TEMP_KEY);
+      try {
+        sessionStorage.removeItem(TEMP_KEY);
+        localStorage.removeItem(TRANSFER_KEY);
+      } catch {}
       S.currentCharacterId = null;
+      // Убираем ?id= из адреса, чтобы не подтянуть старого персонажа
+      window.history.replaceState({}, "", "/v2");
       location.reload();
     }
   });
   $("clear-btn").addEventListener("click", () => {
     if (confirm("Сбросить всё?")) {
-      sessionStorage.removeItem(TEMP_KEY);
+      try {
+        sessionStorage.removeItem(TEMP_KEY);
+        localStorage.removeItem(TRANSFER_KEY);
+      } catch {}
       S.currentCharacterId = null;
+      window.history.replaceState({}, "", "/v2");
       location.reload();
     }
   });
   $("export-btn").addEventListener("click", handleExport);
+  $("print-btn-v2")?.addEventListener("click", handlePrint);
+}
+
+async function handlePrint() {
+  const btn = $("print-btn-v2");
+  const orig = btn ? btn.textContent : "";
+  try {
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "⏳ Печать...";
+    }
+    // WYSIWYG-печать: рендерим точный PNG анкеты и печатаем его
+    const dataUrl = await exportToPNG(true);
+    const name =
+      $("header-name-input")?.value.trim() || "Безымянный";
+    const w = window.open("", "_blank", "noopener,width=1200,height=800");
+    if (!w) {
+      showToast("Разрешите всплывающие окна для печати", true);
+      return;
+    }
+    w.document.write(
+      `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><title>Анкета — ${esc(name)}</title>` +
+        `<style>@page{size:A4 landscape;margin:8mm}html,body{margin:0;padding:0;background:#fff}` +
+        `img{display:block;width:100%;height:auto}` +
+        `@media print{img{width:100%}}</style></head>` +
+        `<body><img src="${dataUrl}" alt="Анкета персонажа"/></body></html>`,
+    );
+    w.document.close();
+    w.focus();
+    const doPrint = () => {
+      try {
+        w.print();
+      } catch {}
+    };
+    const img = w.document.querySelector("img");
+    if (img && !img.complete) img.onload = () => setTimeout(doPrint, 150);
+    else setTimeout(doPrint, 400);
+    showToast("Открыта вкладка печати ✓");
+  } catch (err) {
+    showToast("Ошибка печати: " + (err?.message || ""), true);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = orig;
+    }
+  }
 }
 
 async function handleExport() {
@@ -1748,19 +1890,20 @@ function getExportTheme() {
       numberColor: S.theme.eryNumberColor,
     };
   const b = {
-    nameColor: "#2a1206",
-    namePlaceholder: "rgba(42,18,6,0.55)",
+    nameColor: "#1e0e04",
+    namePlaceholder: "rgba(30,14,4,0.55)",
     inputColor: "#1e0e04",
     inputPlaceholder: "rgba(122,74,26,0.26)",
     inputBorder: "rgba(122,74,26,0.32)",
     customColor: "#1e0e04",
     customPlaceholder: "rgba(122,74,26,0.25)",
     customBorder: "rgba(122,74,26,0.3)",
-    historyColor: "#3b1f0a",
+    historyColor: "#2a1206",
     historyPlaceholder: "rgba(59,31,10,0.25)",
     historyLine: "rgba(100,60,20,0.13)",
     numberColor: "#8b0000",
   };
+  // Тёмная роль (антогонист): светлый текст, как в старом дизайне
   if (S.role === "role-antagonist")
     return {
       ...b,
@@ -1800,7 +1943,7 @@ async function exportToPNG(ret = false) {
   const uiEls = Array.from(sheet.querySelectorAll(".ui-only"));
   const uiPrev = uiEls.map((e) => e.style.display);
   uiEls.forEach((e) => (e.style.display = "none"));
-  fixFrameCornersForExport();
+
   const pI = sheet.querySelector("#portrait-img");
   const pP = pI?.style.cssText || "";
   if (pI && S.port.src && S.port.src !== "loading")
@@ -1810,22 +1953,24 @@ async function exportToPNG(ret = false) {
   if (bI)
     bI.style.cssText = `transform:none;position:absolute;left:${S.bg.x}px;top:${S.bg.y}px;width:${S.bg.nw * S.bg.sc}px;height:${S.bg.nh * S.bg.sc}px;`;
   const reps = [];
+
   // Имена
   [
     ["#header-name-input", S.nameFontSize],
-    ["#header-name-input-right", S.nameFontSize * 0.8],
   ].forEach(([sel, fs]) => {
     const inp = sheet.querySelector(sel);
-    if (!inp || (sel.includes("right") && !S.dualMode)) return;
+    if (!inp) return;
     const v = inp.value || "";
     const d = makeDiv(
-      v || "ДОСЬЕ ПЕРСОНАЖА",
-      `position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:90%;font-family:'Cormorant Garamond',serif;font-size:${fs}px;font-weight:700;color:${v ? theme.nameColor : theme.namePlaceholder};background:transparent;border:none;text-align:center;letter-spacing:6px;line-height:1;padding:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-style:${v ? "normal" : "italic"}`,
+      v || "ИМЯ ПЕРСОНАЖА",
+      `position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:90%;font-family:'Cormorant Garamond',serif;font-size:${fs}px;font-weight:700;color:${v ? theme.nameColor : theme.namePlaceholder};background:transparent;border:none;text-align:center;letter-spacing:5px;line-height:1;padding:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-style:${v ? "normal" : "italic"}`,
     );
     inp.before(d);
     inp.style.display = "none";
     reps.push([inp, d]);
   });
+
+  // Все input/textarea (девиз и узы обрабатываются ниже отдельно)
   sheet
     .querySelectorAll(
       'input[type="text"]:not(.header-name-input):not(.ery-number-input),input:not([type]):not(.header-name-input)',
@@ -1833,8 +1978,10 @@ async function exportToPNG(ret = false) {
     .forEach((inp) => {
       if (
         inp.id === "header-name-input" ||
-        inp.id === "header-name-input-right" ||
-        inp.id === "role-badge-edit-input"
+        inp.id === "role-badge-edit-input" ||
+        inp.id === "v2-motto-input" ||
+        inp.id === "v2-bonds-input" ||
+        inp.id === "v2-sigil-text"
       )
         return;
       const v = inp.value || "";
@@ -1857,6 +2004,31 @@ async function exportToPNG(ret = false) {
     reps.push([inp, d]);
   });
   sheet.querySelectorAll("textarea").forEach((ta) => {
+    if (ta.id === "v2-motto-input" || ta.id === "v2-bonds-input") {
+      // Специальная обработка для новых блоков v2
+      const v = ta.value || "";
+      const isMotto = ta.id === "v2-motto-input";
+      const d = makeDiv(
+        v ||
+          (isMotto
+            ? "Девиз или изречение этого создания…"
+            : "Узы, клятвы, долг перед близкими…"),
+        `font-family:${isMotto ? "'Cormorant Garamond',serif" : "'Philosopher',serif"};` +
+          `font-style:italic;font-size:${isMotto ? "38px" : "28px"};` +
+          `color:${v ? theme.historyColor : theme.historyPlaceholder};` +
+          `background:transparent;display:block;width:100%;` +
+          `text-align:${isMotto ? "center" : "left"};border:none;` +
+          `line-height:${isMotto ? "1.35" : "48px"};white-space:pre-wrap;word-break:break-word;` +
+          `opacity:${v ? "1" : "0.5"};box-sizing:border-box;padding:0 14px;` +
+          (isMotto
+            ? ""
+            : `background-image:repeating-linear-gradient(to bottom,transparent 0px,transparent 47px,${theme.historyLine} 47px,${theme.historyLine} 48px);min-height:180px;`),
+      );
+      ta.before(d);
+      ta.style.display = "none";
+      reps.push([ta, d]);
+      return;
+    }
     const v = ta.value || "";
     const isH = ta.classList.contains("history-textarea");
     const bg = isH
@@ -1864,7 +2036,7 @@ async function exportToPNG(ret = false) {
       : "";
     const d = makeDiv(
       v || ta.placeholder || "",
-      `font-family:'Philosopher',serif;font-size:${isH ? "36px" : S.inputFontSize + "px"};color:${v ? (isH ? theme.historyColor : theme.customColor) : isH ? theme.historyPlaceholder : theme.customPlaceholder};background:transparent;display:block;width:100%;min-height:${isH ? "580px" : "54px"};border:none;border-bottom:${isH ? "none" : `1px dashed ${theme.customBorder}`};padding:${isH ? "0 6px" : "4px 0 6px"};line-height:${isH ? "54px" : "1.5"};white-space:pre-wrap;word-break:break-word;overflow:hidden;box-sizing:border-box;font-style:${v ? "normal" : "italic"};${bg}`,
+      `font-family:'Philosopher',serif;font-size:${isH ? "32px" : S.inputFontSize + "px"};color:${v ? (isH ? theme.historyColor : theme.customColor) : isH ? theme.historyPlaceholder : theme.customPlaceholder};background:transparent;display:block;width:100%;min-height:${isH ? "380px" : "54px"};border:none;border-bottom:${isH ? "none" : `1px dashed ${theme.customBorder}`};padding:${isH ? "0 6px" : "4px 0 6px"};line-height:${isH ? "54px" : "1.5"};white-space:pre-wrap;word-break:break-word;overflow:hidden;box-sizing:border-box;font-style:${v ? "normal" : "italic"};${bg}`,
     );
     ta.before(d);
     ta.style.display = "none";
@@ -1883,7 +2055,7 @@ async function exportToPNG(ret = false) {
       y: 0,
       scrollX: 0,
       scrollY: 0,
-      backgroundColor: "#dfc87e",
+      backgroundColor: "#f0e4c4",
       logging: false,
       imageTimeout: 5000,
       foreignObjectRendering: false,
@@ -1894,7 +2066,6 @@ async function exportToPNG(ret = false) {
   } finally {
     Object.assign(sheet.style, prev);
     uiEls.forEach((e, i) => (e.style.display = uiPrev[i] || ""));
-    restoreFrameCorners();
     if (pI) pI.style.cssText = pP;
     if (bI) bI.style.cssText = bP;
     reps.forEach(([o, r]) => {
@@ -1906,7 +2077,7 @@ async function exportToPNG(ret = false) {
   if (!dataUrl) throw new Error("Canvas пустой");
   if (ret) return dataUrl;
   const a = document.createElement("a");
-  a.download = `character_${Date.now()}.png`;
+  a.download = `character_v2_${Date.now()}.png`;
   a.href = dataUrl;
   a.click();
   return dataUrl;
@@ -1918,28 +2089,12 @@ function makeDiv(t, css) {
   d.style.cssText = css.replace(/\s*\n\s*/g, " ").trim();
   return d;
 }
-let _savedCS = [];
-function fixFrameCornersForExport() {
-  _savedCS = [];
-  sheet
-    .querySelector("#portrait-area")
-    ?.querySelectorAll(".frame-corner")
-    .forEach((c) => {
-      _savedCS.push({ el: c, prev: c.style.cssText });
-      c.style.cssText = `position:absolute;width:80px;height:80px;display:block;overflow:visible;${c.classList.contains("frame-tl") ? "top:-2px;left:-2px;" : ""}${c.classList.contains("frame-tr") ? "top:-2px;right:-2px;" : ""}${c.classList.contains("frame-bl") ? "bottom:-2px;left:-2px;" : ""}${c.classList.contains("frame-br") ? "bottom:-2px;right:-2px;" : ""}`;
-    });
-}
-function restoreFrameCorners() {
-  _savedCS.forEach(({ el, prev }) => (el.style.cssText = prev));
-  _savedCS = [];
-}
 
 // ============================================================
-// CLOUD SAVE
+// CLOUD SAVE (тот же формат + design_version: 2)
 // ============================================================
-
 async function saveToCloud() {
-  const db = getDb();
+  const db = getSupabase();
   if (!db) {
     showToast("Supabase не настроен", true);
     return;
@@ -1953,10 +2108,7 @@ async function saveToCloud() {
     const cd = collectState();
     const eid = S.currentCharacterId || null;
     const roleClass = S.role || "";
-    const roleField = S.customFields.find(
-      (f) => f.label?.trim().toLowerCase() === "роль" && f.type !== "divider",
-    );
-    const roleText = S.roleBadgeCustomText || roleField?.value || "";
+    const roleText = S.roleBadgeCustomText || "";
     let pUrl = cd.port?.src || "";
     if (pUrl && isDataUrl(pUrl)) {
       showToast("Загрузка портрета...");
@@ -1982,20 +2134,17 @@ async function saveToCloud() {
       custom_color: S.customColor || null,
       data: cd,
       is_duo: S.dualMode,
-      duo_name: null,
-      duo_partner_data: null,
+      duo_name: S.dualMode ? S.duoName || null : null,
+      duo_partner_data: S.dualMode
+        ? {
+            fields: cd.fields2 || {},
+            customFields: cd.customFields2 || [],
+            hidden: cd.hidden2 || [],
+            fieldOrder: cd.fieldOrder2 || [],
+          }
+        : null,
       role_badge_text: S.roleBadgeCustomText || null,
     };
-    if (S.dualMode) {
-      payload.duo_name =
-        $("header-name-input-right")?.value.trim() || "Безымянный";
-      payload.duo_partner_data = {
-        fields: cd.fields2,
-        customFields: cd.customFields2,
-        hidden: cd.hidden2,
-        fieldOrder: cd.fieldOrder2,
-      };
-    }
     let sid = eid;
     if (eid) {
       const { data: u, error } = await db
@@ -2044,7 +2193,6 @@ async function saveToCloud() {
 // ============================================================
 // FIELD VALUES
 // ============================================================
-
 function getFieldValues() {
   const ids = [
     "header-name-input",
@@ -2056,6 +2204,8 @@ function getFieldValues() {
     "field-occupation",
     "field-history",
     "erythrogen-value",
+    "v2-motto-input",
+    "v2-bonds-input",
   ];
   const o = {};
   ids.forEach((id) => {
@@ -2064,40 +2214,81 @@ function getFieldValues() {
   });
   return o;
 }
-function getDualFieldValues() {
-  const ids = [
-    "header-name-input-right",
-    "field-r-age",
-    "field-r-birth",
-    "field-r-nation",
-    "field-r-clan",
-    "field-r-nature",
-    "field-r-occupation",
-    "field-r-history",
-    "erythrogen-value-right",
-  ];
-  const o = {};
-  ids.forEach((id) => {
-    const e = $(id);
-    if (e) o[id] = e.value;
-  });
-  return o;
-}
-
 // ============================================================
 // LOAD / RESTORE
 // ============================================================
-
 function loadState() {
-  const raw = sessionStorage.getItem(TEMP_KEY);
-  if (!raw) return;
+  let raw = null;
+  try {
+    raw = sessionStorage.getItem(TEMP_KEY);
+  } catch {}
+  // Новая вкладка: sessionStorage пуст — берём зеркало из localStorage
+  if (!raw) raw = readLocalMirror();
+  if (!raw) return false;
   try {
     applyLoadedData(JSON.parse(raw));
+    return true;
   } catch (e) {
-    console.warn("Load error:", e);
+    console.warn("v2 Load error:", e);
+    return false;
   }
 }
 
+// Загрузка анкеты напрямую из Supabase по ?id= (для прямых ссылок /v2?id=...).
+// Формат данных тот же, что у старого дизайна → авто-перестроение под v2.
+async function fetchCharacterById(charId) {
+  const db = getSupabase();
+  if (!db) {
+    showToast("Supabase не настроен", true);
+    return;
+  }
+  showToast("Загрузка анкеты…");
+  try {
+    const { data, error } = await db
+      .from("characters")
+      .select("data, is_duo, duo_partner_data, duo_name")
+      .eq("id", charId)
+      .single();
+    if (error) throw error;
+    let payload =
+      typeof data.data === "string" ? JSON.parse(data.data) : data.data;
+    if (!payload || typeof payload !== "object") payload = {};
+    payload.currentCharacterId = charId;
+    if (data.is_duo && data.duo_partner_data) {
+      const dp =
+        typeof data.duo_partner_data === "string"
+          ? JSON.parse(data.duo_partner_data)
+          : data.duo_partner_data;
+      payload.dualMode = true;
+      payload.fields2 = dp.fields || {};
+      payload.customFields2 = dp.customFields || [];
+      payload.hidden2 = dp.hidden || [];
+      payload.fieldOrder2 = dp.fieldOrder || [];
+      payload.duoName = data.duo_name || "";
+    }
+    applyLoadedData(payload);
+    applySheetSize();
+    applyPortraitSize();
+    applyFontSizes();
+    if (S.role) {
+      roleSelect.value = S.role;
+      applyRole(S.role);
+    }
+    if (S.customColor) {
+      const ci = $("custom-color-input");
+      if (ci) ci.value = S.customColor;
+    }
+    applyCustomColor();
+    restoreAll();
+    updateFieldOrder();
+    fitToScreen();
+    saveTempState();
+    showToast("✓ Анкета загружена");
+  } catch (e) {
+    console.error("v2 fetch error:", e);
+    showToast("Ошибка загрузки: " + (e.message || ""), true);
+  }
+}
 function applyLoadedData(d) {
   if (!d) return;
   if (typeof d.sheetW === "number" && d.sheetW >= MIN_SW) S.sheetW = d.sheetW;
@@ -2121,6 +2312,7 @@ function applyLoadedData(d) {
     S.fieldOrder = d.fieldOrder;
   if (Array.isArray(d.fieldOrder2) && d.fieldOrder2.length)
     S.fieldOrder2 = d.fieldOrder2;
+  if (typeof d.duoName === "string") S.duoName = d.duoName;
   if (typeof d.labelFontSize === "number") S.labelFontSize = d.labelFontSize;
   if (typeof d.inputFontSize === "number") S.inputFontSize = d.inputFontSize;
   if (typeof d.nameFontSize === "number") S.nameFontSize = d.nameFontSize;
@@ -2137,21 +2329,29 @@ function applyLoadedData(d) {
     S.roleBadgeCustomText = d.roleBadgeCustomText;
   if (typeof d.roleBadgeFontSize === "number")
     S.roleBadgeFontSize = d.roleBadgeFontSize;
+  // Новые поля v2
+  if (typeof d.motto === "string") S.motto = d.motto;
+  if (typeof d.status === "string") S.status = d.status;
+  if (typeof d.reputation === "string") S.reputation = d.reputation;
+  if (typeof d.bonds === "string") S.bonds = d.bonds;
+  if (typeof d.sigilColor === "string" && d.sigilColor) S.sigilColor = d.sigilColor;
+  if (typeof d.sigilText === "string") S.sigilText = d.sigilText;
+  // Обратная совместимость со старым форматом sigil (одной строкой)
+  if (typeof d.sigil === "string" && d.sigil && !d.sigilColor && !d.sigilText) {
+    if (d.sigil.startsWith("#")) S.sigilColor = d.sigil;
+    else S.sigilText = d.sigil;
+  }
   S._savedFields = d.fields || {};
   S._savedFields2 = d.fields2 || {};
-  S._fieldsRendered = false;
-  // ===== v2-совместимость (только добавление; поведение v1 не меняется) =====
-  // Поля нового дизайна, которых нет в v1: запоминаем как есть, чтобы при
-  // круговом переходе v2 → v1 → v2 девиз/статус/репутация/узы/печатка не терялись.
-  S._v2extra = {};
-  ["motto", "status", "reputation", "bonds", "sigilColor", "sigilText", "sigil", "duoName"].forEach(
-    (k) => {
-      if (d[k] !== undefined) S._v2extra[k] = d[k];
-    },
-  );
+  // Девиз/узы могли сохраниться только внутри fields — подхватим
+  if (!S.motto && S._savedFields["v2-motto-input"])
+    S.motto = S._savedFields["v2-motto-input"];
+  if (!S.bonds && S._savedFields["v2-bonds-input"])
+    S.bonds = S._savedFields["v2-bonds-input"];
 }
 
 function restoreAll() {
+  // Базовые поля
   Object.entries(S._savedFields || {}).forEach(([id, v]) => {
     const e = $(id);
     if (e) {
@@ -2160,18 +2360,17 @@ function restoreAll() {
     }
   });
   if (!S.eryHintVisible) $("rank-info-inline")?.classList.add("hidden");
-  if (!S._fieldsRendered) {
-    S.customFields.forEach((f) => {
-      if (f.type === "divider") renderCustomDivider(f);
-      else renderCustomField(f);
-    });
-    S._fieldsRendered = true;
-  }
+  // Кастомные поля
+  S.customFields.forEach((f) => {
+    if (f.type === "divider") renderCustomDivider(f);
+    else renderCustomField(f);
+  });
   applyFieldOrder();
   S.hiddenFields.forEach((id) => {
     const e = document.querySelector(`[data-field-id="${id}"]`);
     if (e) e.style.display = "none";
   });
+  // Портрет
   if (S.port.src && S.port.src !== "loading") {
     portImg.src = S.port.src;
     portImg.onload = () => {
@@ -2193,51 +2392,12 @@ function restoreAll() {
     if (ci) ci.value = S.customColor;
     applyCustomColor();
   }
-
-  if (S.dualMode) {
-    setTimeout(() => {
-      const rl = $("fields-list-right");
-      Object.entries(S._savedFields2 || {}).forEach(([id, v]) => {
-        const e = $(id);
-        if (e) {
-          e.value = v;
-          e.dispatchEvent(new Event("input"));
-        }
-      });
-      if (rl && S.customFields2)
-        S.customFields2.forEach((f) => {
-          if (f.type === "divider") renderCustomDivider(f, rl, true);
-          else renderCustomField(f, rl, true);
-        });
-      if (rl)
-        S.hiddenFields2.forEach((id) => {
-          const e = rl.querySelector(`[data-field-id="${id}"]`);
-          if (e) e.style.display = "none";
-        });
-      if (S.fieldOrder2?.length && rl)
-        S.fieldOrder2.forEach((id) => {
-          const e = rl.querySelector(`[data-field-id="${id}"]`);
-          if (e) rl.appendChild(e);
-        });
-
-      // Инициализируем Sortable для правой колонки
-      initDragAndDrop();
-
-      [
-        "header-name-input-right",
-        "field-r-age",
-        "field-r-birth",
-        "field-r-nation",
-        "field-r-clan",
-        "field-r-nature",
-        "field-r-occupation",
-        "field-r-history",
-        "erythrogen-value-right",
-      ].forEach((id) => {
-        $(id)?.addEventListener("change", () => saveTempState());
-      });
-    }, 100);
-  }
+  // Новые поля v2
+  initBonds();
+  initSigil();
+  applyStatusToUI();
+  applyReputationToUI();
+  if (S.dualMode) applyDualMode();
   [
     "header-name-input",
     "field-age",
@@ -2248,14 +2408,17 @@ function restoreAll() {
     "field-occupation",
     "field-history",
   ].forEach((id) => {
-    $(id)?.addEventListener("change", () => saveTempState());
+    const el = $(id);
+    if (el && !el._v2change) {
+      el._v2change = true;
+      el.addEventListener("change", () => saveTempState());
+    }
   });
 }
 
 // ============================================================
 // HELPERS
 // ============================================================
-
 function clamp(v, mn, mx) {
   return Math.min(mx, Math.max(mn, v));
 }
@@ -2275,6 +2438,7 @@ function isDataUrl(v) {
 }
 function showToast(msg, err = false) {
   const t = $("toast");
+  if (!t) return;
   t.textContent = msg;
   t.style.background = err ? "#4a0808" : "#2a1206";
   t.style.borderColor = err ? "#cc2222" : "#8b6914";
@@ -2283,16 +2447,4 @@ function showToast(msg, err = false) {
   t._t = setTimeout(() => (t.style.opacity = "0"), 2800);
 }
 
-export function loadCharacterData(data) {
-  if (data.is_duo && data.duo_partner_data) {
-    const c = {
-      ...data.data,
-      dualMode: true,
-      fields2: data.duo_partner_data.fields || {},
-      customFields2: data.duo_partner_data.customFields || [],
-      hidden2: data.duo_partner_data.hidden || [],
-      fieldOrder2: data.duo_partner_data.fieldOrder || [],
-    };
-    sessionStorage.setItem(TEMP_KEY, JSON.stringify(c));
-  } else sessionStorage.setItem(TEMP_KEY, JSON.stringify(data.data || data));
-}
+
