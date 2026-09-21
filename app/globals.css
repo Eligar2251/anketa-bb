@@ -8,6 +8,7 @@
   --label-font-size: 26px;
   --input-font-size: 42px;
   --ery-font-size: 64px;
+  --ery-title-font-size: 28px;
   --rank-name-font-size: 32px;
   --rank-range-font-size: 26px;
 }
@@ -779,7 +780,7 @@ body {
 
 .erythrogen-title {
   font-family: "Uncial Antiqua", "Cormorant Garamond", serif;
-  font-size: 28px;
+  font-size: var(--ery-title-font-size) !important;
   color: #7a1a1a;
   letter-spacing: 4px;
   text-transform: uppercase;

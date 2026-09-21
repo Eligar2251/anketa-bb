@@ -367,6 +367,21 @@ function EditorPageInner() {
             </div>
           </div>
           <div className="font-setting-row">
+            <label>Заголовок эритрогенов</label>
+            <div className="font-setting-control">
+              <input
+                type="range"
+                id="ery-title-font-size"
+                min="14"
+                max="60"
+                defaultValue="28"
+              />
+              <span id="ery-title-font-val" className="font-val">
+                28px
+              </span>
+            </div>
+          </div>
+          <div className="font-setting-row">
             <label>Число эритрогенов</label>
             <div className="font-setting-control">
               <input
