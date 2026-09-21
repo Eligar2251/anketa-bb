@@ -169,6 +169,7 @@ const S = {
   inputFontSize: 30,
   nameFontSize: 70,
   eryFontSize: 64,
+  eryTitleFontSize: 22,
   rankNameFontSize: 26,
   rankRangeFontSize: 22,
   eryHintVisible: true,
@@ -420,6 +421,7 @@ function collectState() {
     inputFontSize: S.inputFontSize,
     nameFontSize: S.nameFontSize,
     eryFontSize: S.eryFontSize,
+    eryTitleFontSize: S.eryTitleFontSize,
     rankNameFontSize: S.rankNameFontSize,
     rankRangeFontSize: S.rankRangeFontSize,
     eryHintVisible: S.eryHintVisible,
@@ -661,6 +663,7 @@ function initFontSizeControls() {
   setupSlider("name-font-size", "name-font-val", "nameFontSize");
   setupSlider("label-font-size", "label-font-val", "labelFontSize");
   setupSlider("input-font-size", "input-font-val", "inputFontSize");
+  setupSlider("ery-title-font-size", "ery-title-font-val", "eryTitleFontSize");
   setupSlider("ery-font-size", "ery-font-val", "eryFontSize");
   setupSlider("rank-name-font-size", "rank-name-font-val", "rankNameFontSize");
   setupSlider(
@@ -694,6 +697,7 @@ function applyFontSizes() {
   r.style.setProperty("--label-font-size", S.labelFontSize + "px");
   r.style.setProperty("--input-font-size", S.inputFontSize + "px");
   r.style.setProperty("--ery-font-size", S.eryFontSize + "px");
+  r.style.setProperty("--ery-title-font-size", S.eryTitleFontSize + "px");
   r.style.setProperty("--rank-name-font-size", S.rankNameFontSize + "px");
   r.style.setProperty("--rank-range-font-size", S.rankRangeFontSize + "px");
   // Крупные шрифты делают блоки выше — лист должен подрасти
@@ -2433,6 +2437,7 @@ function applyLoadedData(d) {
   if (typeof d.inputFontSize === "number") S.inputFontSize = d.inputFontSize;
   if (typeof d.nameFontSize === "number") S.nameFontSize = d.nameFontSize;
   if (typeof d.eryFontSize === "number") S.eryFontSize = d.eryFontSize;
+  if (typeof d.eryTitleFontSize === "number") S.eryTitleFontSize = d.eryTitleFontSize;
   if (typeof d.rankNameFontSize === "number")
     S.rankNameFontSize = d.rankNameFontSize;
   if (typeof d.rankRangeFontSize === "number")
