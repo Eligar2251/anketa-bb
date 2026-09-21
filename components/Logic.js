@@ -1921,13 +1921,46 @@ function makeDiv(t, css) {
 let _savedCS = [];
 function fixFrameCornersForExport() {
   _savedCS = [];
-  sheet
-    .querySelector("#portrait-area")
-    ?.querySelectorAll(".frame-corner")
-    .forEach((c) => {
-      _savedCS.push({ el: c, prev: c.style.cssText });
-      c.style.cssText = `position:absolute;width:80px;height:80px;display:block;overflow:visible;${c.classList.contains("frame-tl") ? "top:-2px;left:-2px;" : ""}${c.classList.contains("frame-tr") ? "top:-2px;right:-2px;" : ""}${c.classList.contains("frame-bl") ? "bottom:-2px;left:-2px;" : ""}${c.classList.contains("frame-br") ? "bottom:-2px;right:-2px;" : ""}`;
-    });
+  const portraitArea = sheet.querySelector("#portrait-area");
+  if (!portraitArea) return;
+  const pw = S.portW;
+  const ph = S.portH;
+  // Уголки рамки — используем только left/top, т.к. html2canvas плохо обрабатывает right/bottom
+  // Из-за этого ранее оставался только левый верхний уголок (TL), остальные пропадали
+  portraitArea.querySelectorAll(".frame-corner").forEach((c) => {
+    _savedCS.push({ el: c, prev: c.style.cssText });
+    let left, top;
+    if (c.classList.contains("frame-tl")) {
+      left = -2;
+      top = -2;
+    } else if (c.classList.contains("frame-tr")) {
+      left = pw - 78;
+      top = -2;
+    } else if (c.classList.contains("frame-bl")) {
+      left = -2;
+      top = ph - 78;
+    } else if (c.classList.contains("frame-br")) {
+      left = pw - 78;
+      top = ph - 78;
+    } else {
+      left = -2;
+      top = -2;
+    }
+    c.style.cssText = `position:absolute;width:80px;height:80px;display:block;overflow:visible;left:${left}px;top:${top}px;z-index:6;pointer-events:none;`;
+  });
+  // Линии рамки — тоже фиксим на явные left/top/width/height вместо right/bottom
+  portraitArea.querySelectorAll(".frame-line").forEach((l) => {
+    _savedCS.push({ el: l, prev: l.style.cssText });
+    if (l.classList.contains("frame-top")) {
+      l.style.cssText = `position:absolute;display:block;left:78px;top:0px;width:${Math.max(0, pw - 156)}px;height:3px;background:#7a4a1a;z-index:5;pointer-events:none;`;
+    } else if (l.classList.contains("frame-bottom")) {
+      l.style.cssText = `position:absolute;display:block;left:78px;top:${ph - 3}px;width:${Math.max(0, pw - 156)}px;height:3px;background:#7a4a1a;z-index:5;pointer-events:none;`;
+    } else if (l.classList.contains("frame-left")) {
+      l.style.cssText = `position:absolute;display:block;left:0px;top:78px;width:3px;height:${Math.max(0, ph - 156)}px;background:#7a4a1a;z-index:5;pointer-events:none;`;
+    } else if (l.classList.contains("frame-right")) {
+      l.style.cssText = `position:absolute;display:block;left:${pw - 3}px;top:78px;width:3px;height:${Math.max(0, ph - 156)}px;background:#7a4a1a;z-index:5;pointer-events:none;`;
+    }
+  });
 }
 function restoreFrameCorners() {
   _savedCS.forEach(({ el, prev }) => (el.style.cssText = prev));

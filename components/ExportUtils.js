@@ -54,9 +54,17 @@ export async function exportSheetToPNG(sheetElement, options = {}) {
   // 5. Фиксируем все input и textarea значения как текстовые ноды
   fixInputValues(clone);
 
+  // 5.1 Фиксим рамку портрета — html2canvas не рендерит right/bottom, поэтому
+  // переводим все уголки и линии на left/top
+  // (функция вызывается после добавления в DOM, чтобы можно было измерить размеры)
+  // Заглушка — реальный фикс после append
+
   // 6. Добавляем в DOM
   container.appendChild(clone);
   document.body.appendChild(container);
+
+  // 6.1 Фиксим углы и линии рамки в клоне
+  fixPortraitFrameInClone(clone);
 
   // Ждём загрузки изображений
   await waitForImages(clone);
@@ -176,6 +184,90 @@ function fixInputValues(element) {
     }
     
     textarea.parentNode.replaceChild(div, textarea);
+  });
+}
+
+/**
+ * Фиксит рамку портрета для html2canvas:
+ * заменяет right/bottom на вычисленные left/top, чтобы все 4 уголка рендерились.
+ * Причина бага: html2canvas плохо считает right/bottom внутри overflow:hidden.
+ */
+function fixPortraitFrameInClone(clone) {
+  const portraitArea = clone.querySelector("#portrait-area");
+  if (!portraitArea) return;
+  // Размеры области портрета — берём из реального DOM (offset) или из inline-стилей
+  let pw = portraitArea.offsetWidth;
+  let ph = portraitArea.offsetHeight;
+  // fallback: пробуем из style
+  if (!pw || pw < 80) {
+    const col = clone.querySelector("#portrait-column");
+    if (col) {
+      pw = col.offsetWidth || parseInt(col.style.width, 10) || 860;
+    } else {
+      pw = 860;
+    }
+  }
+  if (!ph || ph < 80) {
+    ph = parseInt(portraitArea.style.height, 10) || 3000;
+  }
+
+  portraitArea.querySelectorAll(".frame-corner").forEach((c) => {
+    let left, top;
+    if (c.classList.contains("frame-tl")) {
+      left = -2;
+      top = -2;
+    } else if (c.classList.contains("frame-tr")) {
+      left = pw - 78;
+      top = -2;
+    } else if (c.classList.contains("frame-bl")) {
+      left = -2;
+      top = ph - 78;
+    } else if (c.classList.contains("frame-br")) {
+      left = pw - 78;
+      top = ph - 78;
+    } else {
+      left = -2;
+      top = -2;
+    }
+    c.style.position = "absolute";
+    c.style.width = "80px";
+    c.style.height = "80px";
+    c.style.display = "block";
+    c.style.overflow = "visible";
+    c.style.left = left + "px";
+    c.style.top = top + "px";
+    c.style.right = "auto";
+    c.style.bottom = "auto";
+    c.style.zIndex = "6";
+  });
+
+  portraitArea.querySelectorAll(".frame-line").forEach((l) => {
+    l.style.position = "absolute";
+    l.style.display = "block";
+    l.style.right = "auto";
+    l.style.bottom = "auto";
+    l.style.zIndex = "5";
+    if (l.classList.contains("frame-top")) {
+      l.style.left = "78px";
+      l.style.top = "0px";
+      l.style.width = Math.max(0, pw - 156) + "px";
+      l.style.height = "3px";
+    } else if (l.classList.contains("frame-bottom")) {
+      l.style.left = "78px";
+      l.style.top = ph - 3 + "px";
+      l.style.width = Math.max(0, pw - 156) + "px";
+      l.style.height = "3px";
+    } else if (l.classList.contains("frame-left")) {
+      l.style.left = "0px";
+      l.style.top = "78px";
+      l.style.width = "3px";
+      l.style.height = Math.max(0, ph - 156) + "px";
+    } else if (l.classList.contains("frame-right")) {
+      l.style.left = pw - 3 + "px";
+      l.style.top = "78px";
+      l.style.width = "3px";
+      l.style.height = Math.max(0, ph - 156) + "px";
+    }
   });
 }
 
