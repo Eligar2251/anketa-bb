@@ -77,6 +77,9 @@ let _dualInitialized = false;
 let _buttonsInitialized = false;
 let _addFieldInitialized = false;
 let _dividerInitialized = false;
+let _extraPhotoInitialized = false;
+let _extraPhotoTarget = null;
+let _extraPhotoDrag = null;
 
 const ROLE_DISPLAY_NAMES = {
   "": "Стандартная",
@@ -279,6 +282,7 @@ export function initApp() {
   initPan();
   initZoom();
   initPortrait();
+  initExtraPhotos();
   initBackground();
   initSheetResize();
   initSheetResizeX();
@@ -319,6 +323,9 @@ export function resetAppInit() {
   _buttonsInitialized = false;
   _addFieldInitialized = false;
   _dividerInitialized = false;
+  _extraPhotoInitialized = false;
+  _extraPhotoTarget = null;
+  _extraPhotoDrag = null;
 
   if (S.autoSaveTimer) {
     clearInterval(S.autoSaveTimer);
@@ -381,8 +388,16 @@ function collectState() {
     fields2: S.dualMode ? getDualFieldValues() : {},
     hidden: [...S.hiddenFields],
     hidden2: S.dualMode ? [...S.hiddenFields2] : [],
-    customFields: S.customFields.map((f) => ({ ...f })),
-    customFields2: S.dualMode ? S.customFields2.map((f) => ({ ...f })) : [],
+    customFields: S.customFields.map((f) => ({
+      ...f,
+      photo: f.photo ? { ...f.photo } : undefined,
+    })),
+    customFields2: S.dualMode
+      ? S.customFields2.map((f) => ({
+          ...f,
+          photo: f.photo ? { ...f.photo } : undefined,
+        }))
+      : [],
     customCounter: S.customCounter,
     dividerCounter: S.dividerCounter,
     role: S.role,
@@ -735,6 +750,7 @@ function initPan() {
     (e) => {
       if (
         e.target.closest(".portrait-area") ||
+        e.target.closest(".extra-photo-area") ||
         e.target.closest("#sheet-bg-layer")
       )
         return;
@@ -1405,12 +1421,12 @@ function initAddField() {
     }
     S.customCounter++;
     const id = `custom_${S.customCounter}`;
-    const fL = { id, label, type, icon, value: "" };
+    const fL = makeCustomField(id, label, type, icon);
     S.customFields.push(fL);
     renderCustomField(fL);
     if (S.dualMode) {
       const idR = `r-custom_${S.customCounter}`;
-      const fR = { id: idR, label, type, icon, value: "" };
+      const fR = makeCustomField(idR, label, type, icon);
       S.customFields2.push(fR);
       const rl = $("fields-list-right");
       if (rl) renderCustomField(fR, rl, true);
@@ -1422,9 +1438,51 @@ function initAddField() {
   });
 }
 
+function makeCustomField(id, label, type, icon) {
+  const f = { id, label, type, icon, value: "" };
+  if (type === "photo") f.photo = emptyExtraPhoto();
+  return f;
+}
+
+function emptyExtraPhoto() {
+  return { src: "", x: 0, y: 0, sc: 1, nw: 0, nh: 0 };
+}
+
+function hydrateCustomField(f) {
+  const out = { ...f };
+  if (out.type === "photo") {
+    out.photo = { ...emptyExtraPhoto(), ...(f.photo || {}) };
+  }
+  return out;
+}
+
+async function uploadExtraPhotosInList(list) {
+  if (!Array.isArray(list)) return;
+  for (const f of list) {
+    if (f.type !== "photo" || !f.photo?.src || !isDataUrl(f.photo.src)) continue;
+    showToast("Загрузка фото...");
+    f.photo.src = await uploadImageToCloudinary(f.photo.src, {
+      folder: "character-sheet/portraits",
+    });
+    const img = document.querySelector(
+      `[data-field-id="${f.id}"] .extra-photo-img`,
+    );
+    if (img) img.src = f.photo.src;
+  }
+}
+
+function ensureExtraPhoto(f) {
+  if (!f.photo || typeof f.photo !== "object") f.photo = emptyExtraPhoto();
+  return f.photo;
+}
+
 function renderCustomField(f, container = null, isR = false) {
   const c = container || fieldsList;
   if (!c || c.querySelector(`[data-field-id="${f.id}"]`)) return;
+  if (f.type === "photo") {
+    renderCustomPhotoField(f, c, isR);
+    return;
+  }
   const w = document.createElement("div");
   w.className = "custom-field-row";
   w.dataset.fieldId = f.id;
@@ -1445,6 +1503,242 @@ function renderCustomField(f, container = null, isR = false) {
     saveTempState();
   });
   c.appendChild(w);
+}
+
+function renderCustomPhotoField(f, container, isR = false) {
+  const p = ensureExtraPhoto(f);
+  const w = document.createElement("div");
+  w.className = "custom-field-row extra-photo-row";
+  w.dataset.fieldId = f.id;
+  const ic = FIELD_ICONS[f.icon] || FIELD_ICONS.photo;
+  const side = isR || f.id.startsWith("r-") ? ' data-side="right"' : "";
+  const has = !!(p.src && p.src !== "loading");
+  w.innerHTML = `<div class="field-delete-btn ui-only" data-target="${f.id}"${side} title="Удалить">✕</div>
+    <div class="field-icon-wrap">${ic}</div>
+    <div class="field-content extra-photo-content">
+      <input type="text" class="field-label extra-photo-caption" maxlength="40" placeholder="Подпись (например, Лицо)" autocomplete="off" />
+      <div class="extra-photo-area">
+        <div class="extra-photo-placeholder"${has ? ' style="display:none"' : ""}>
+          <span>Нажмите, чтобы загрузить фото</span>
+        </div>
+        <div class="extra-photo-wrapper${has ? " active" : ""}">
+          <img class="extra-photo-img" alt="" draggable="false" />
+        </div>
+        <div class="extra-photo-hint ui-only${has ? " visible" : ""}">Колёсико — масштаб · перетащите кадр</div>
+        <div class="portrait-actions extra-photo-actions ui-only" style="display:${has ? "flex" : "none"}">
+          <button type="button" class="portrait-change-btn extra-photo-change" title="Заменить">🔄</button>
+          <button type="button" class="portrait-delete-btn extra-photo-clear" title="Удалить фото">🗑</button>
+        </div>
+      </div>
+    </div>`;
+  const cap = w.querySelector(".extra-photo-caption");
+  cap.value = f.label || "";
+  cap.addEventListener("input", () => {
+    f.label = cap.value;
+  });
+  cap.addEventListener("change", () => {
+    f.label = cap.value;
+    saveTempState();
+  });
+  bindExtraPhotoField(f, w);
+  container.appendChild(w);
+  if (has) {
+    const img = w.querySelector(".extra-photo-img");
+    img.src = p.src;
+    img.onload = () => {
+      if (!p.nw) {
+        p.nw = img.naturalWidth;
+        p.nh = img.naturalHeight;
+        const areaW = w.querySelector(".extra-photo-area")?.clientWidth || 320;
+        if (!p.sc || p.sc === 1) p.sc = areaW / Math.max(p.nw, 1);
+      }
+      applyExtraPhotoTransform(f, img);
+    };
+  }
+}
+
+function extraPhotoEls(root) {
+  return {
+    area: root.querySelector(".extra-photo-area"),
+    wrap: root.querySelector(".extra-photo-wrapper"),
+    img: root.querySelector(".extra-photo-img"),
+    ph: root.querySelector(".extra-photo-placeholder"),
+    hint: root.querySelector(".extra-photo-hint"),
+    actions: root.querySelector(".extra-photo-actions"),
+  };
+}
+
+function applyExtraPhotoTransform(f, img) {
+  const p = ensureExtraPhoto(f);
+  if (!img) return;
+  img.style.width = (p.nw || 0) + "px";
+  img.style.height = (p.nh || 0) + "px";
+  img.style.transform = `translate(${p.x}px,${p.y}px) scale(${p.sc})`;
+}
+
+function bindExtraPhotoField(f, root) {
+  const els = extraPhotoEls(root);
+  const openPicker = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    _extraPhotoTarget = f;
+    $("extra-photo-input")?.click();
+  };
+  els.area.addEventListener("click", (e) => {
+    if (e.target.closest(".extra-photo-actions")) return;
+    const p = ensureExtraPhoto(f);
+    if (p.src && p.src !== "loading") return;
+    openPicker(e);
+  });
+  els.area.querySelector(".extra-photo-change")?.addEventListener("click", openPicker);
+  els.area.querySelector(".extra-photo-clear")?.addEventListener("click", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const p = ensureExtraPhoto(f);
+    if (!p.src || p.src === "loading") return;
+    if (!confirm("Удалить фото?")) return;
+    const oldSrc = p.src;
+    try {
+      if (oldSrc && !isDataUrl(oldSrc)) await deleteImageFromCloudinary(oldSrc);
+      Object.assign(p, emptyExtraPhoto());
+      els.wrap.classList.remove("active");
+      els.img.src = "";
+      els.ph.style.display = "";
+      els.hint.classList.remove("visible");
+      els.actions.style.display = "none";
+      saveTempState();
+      showToast("Фото удалено");
+    } catch {
+      showToast("Ошибка удаления", true);
+    }
+  });
+  els.img.addEventListener("mousedown", (e) => {
+    const p = ensureExtraPhoto(f);
+    if (!p.src || p.src === "loading") return;
+    e.stopPropagation();
+    e.preventDefault();
+    _extraPhotoDrag = {
+      f,
+      img: els.img,
+      sx: e.clientX,
+      sy: e.clientY,
+      stx: p.x,
+      sty: p.y,
+    };
+    els.img.classList.add("grabbing");
+  });
+  els.area.addEventListener(
+    "wheel",
+    (e) => {
+      const p = ensureExtraPhoto(f);
+      if (!p.src || p.src === "loading") return;
+      e.preventDefault();
+      e.stopPropagation();
+      const factor = e.deltaY < 0 ? 1.08 : 0.93;
+      const ns = clamp(p.sc * factor, 0.02, 30);
+      const rect = els.area.getBoundingClientRect();
+      const mx = (e.clientX - rect.left) / S.scale;
+      const my = (e.clientY - rect.top) / S.scale;
+      const px = (mx - p.x) / p.sc;
+      const py = (my - p.y) / p.sc;
+      p.sc = ns;
+      p.x = mx - px * ns;
+      p.y = my - py * ns;
+      applyExtraPhotoTransform(f, els.img);
+      saveTempState();
+    },
+    { passive: false },
+  );
+}
+
+function initExtraPhotos() {
+  if (_extraPhotoInitialized) return;
+  _extraPhotoInitialized = true;
+  const input = $("extra-photo-input");
+  if (!input) return;
+  input.addEventListener("change", (e) => {
+    const file = e.target.files?.[0];
+    input.value = "";
+    const f = _extraPhotoTarget;
+    _extraPhotoTarget = null;
+    if (!file || !f) return;
+    if (!file.type.startsWith("image/")) {
+      showToast("Файл не является изображением", true);
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      showToast("Файл слишком большой", true);
+      return;
+    }
+    loadExtraPhotoFile(f, file);
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (!_extraPhotoDrag) return;
+    const { f, img, sx, sy, stx, sty } = _extraPhotoDrag;
+    const p = ensureExtraPhoto(f);
+    p.x = stx + (e.clientX - sx) / S.scale;
+    p.y = sty + (e.clientY - sy) / S.scale;
+    applyExtraPhotoTransform(f, img);
+  });
+  window.addEventListener("mouseup", () => {
+    if (!_extraPhotoDrag) return;
+    _extraPhotoDrag.img?.classList.remove("grabbing");
+    _extraPhotoDrag = null;
+    saveTempState();
+  });
+}
+
+function loadExtraPhotoFile(f, file) {
+  const p = ensureExtraPhoto(f);
+  const prevSrc = p.src;
+  const root = document.querySelector(`[data-field-id="${f.id}"]`);
+  if (!root) return;
+  const els = extraPhotoEls(root);
+  p.src = "loading";
+  const sp = els.ph.querySelector("span");
+  if (sp) sp.textContent = "Загрузка...";
+  els.ph.style.display = "";
+  const url = URL.createObjectURL(file);
+  const tmp = new Image();
+  tmp.onload = () => {
+    convertToDataUrl(url, tmp.naturalWidth, tmp.naturalHeight, async (dataUrl) => {
+      URL.revokeObjectURL(url);
+      if (!dataUrl) {
+        Object.assign(p, emptyExtraPhoto());
+        if (sp) sp.textContent = "Нажмите, чтобы загрузить фото";
+        showToast("Ошибка загрузки", true);
+        return;
+      }
+      try {
+        if (prevSrc && !isDataUrl(prevSrc) && prevSrc !== "loading")
+          await deleteImageFromCloudinary(prevSrc);
+      } catch {}
+      const areaW = els.area.clientWidth || 320;
+      p.src = dataUrl;
+      p.nw = tmp.naturalWidth;
+      p.nh = tmp.naturalHeight;
+      p.sc = areaW / Math.max(tmp.naturalWidth, 1);
+      p.x = 0;
+      p.y = 0;
+      els.img.src = dataUrl;
+      els.img.onload = () => {
+        els.wrap.classList.add("active");
+        els.ph.style.display = "none";
+        if (sp) sp.textContent = "Нажмите, чтобы загрузить фото";
+        els.hint.classList.add("visible");
+        els.actions.style.display = "flex";
+        applyExtraPhotoTransform(f, els.img);
+        saveTempState();
+      };
+    });
+  };
+  tmp.onerror = () => {
+    URL.revokeObjectURL(url);
+    Object.assign(p, emptyExtraPhoto());
+    if (sp) sp.textContent = "Нажмите, чтобы загрузить фото";
+    showToast("Ошибка чтения файла", true);
+  };
+  tmp.src = url;
 }
 
 function initAddDivider() {
@@ -2011,6 +2305,8 @@ async function saveToCloud() {
       cd.bg.src = bu;
       S.bg.src = bu;
     }
+    await uploadExtraPhotosInList(cd.customFields);
+    if (S.dualMode) await uploadExtraPhotosInList(cd.customFields2);
     const payload = {
       name,
       image_url: pUrl || null,
@@ -2147,9 +2443,9 @@ function applyLoadedData(d) {
   if (Array.isArray(d.hidden2))
     d.hidden2.forEach((id) => S.hiddenFields2.add(id));
   if (Array.isArray(d.customFields))
-    S.customFields = d.customFields.map((f) => ({ ...f }));
+    S.customFields = d.customFields.map(hydrateCustomField);
   if (Array.isArray(d.customFields2))
-    S.customFields2 = d.customFields2.map((f) => ({ ...f }));
+    S.customFields2 = d.customFields2.map(hydrateCustomField);
   if (typeof d.customCounter === "number") S.customCounter = d.customCounter;
   if (typeof d.dividerCounter === "number") S.dividerCounter = d.dividerCounter;
   if (d.role !== undefined) S.role = d.role;

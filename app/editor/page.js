@@ -200,6 +200,20 @@ function EditorPageInner() {
           pointerEvents: "none",
         }}
       />
+      <input
+        type="file"
+        id="extra-photo-input"
+        accept="image/*"
+        style={{
+          position: "fixed",
+          top: "-9999px",
+          left: "-9999px",
+          opacity: 0,
+          width: "1px",
+          height: "1px",
+          pointerEvents: "none",
+        }}
+      />
 
       {/* ======== МОДАЛКА: ДОБАВИТЬ ПОЛЕ ======== */}
       <div
@@ -223,6 +237,7 @@ function EditorPageInner() {
             <select id="new-field-type">
               <option value="input">Строка</option>
               <option value="textarea">Многострочный</option>
+              <option value="photo">Ячейка фото</option>
             </select>
           </div>
           <div className="modal-row">
@@ -245,6 +260,7 @@ function EditorPageInner() {
               <option value="gender">Пол</option>
               <option value="skills">Навыки</option>
               <option value="inventory">Предметы</option>
+              <option value="photo">Фото</option>
               <option value="location">Родовое имение</option>
               <option value="speech">Язык</option>
               <option value="status">Состояние</option>
