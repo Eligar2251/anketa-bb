@@ -3,6 +3,7 @@
 import Sortable from "sortablejs";
 import { FIELD_ICONS } from "./Icons";
 import { getSupabase } from "../lib/supabase";
+import { TEMP_KEY, writeTransfer, clearTransfer } from "../lib/transfer";
 import {
   uploadImageToCloudinary,
   deleteImageFromCloudinary,
@@ -15,7 +16,7 @@ import {
 
 const getDb = () => getSupabase();
 
-const TEMP_KEY = "charSheet_temp_v12";
+
 const DEFAULT_SW = 2000,
   DEFAULT_SH = 4000,
   DEFAULT_PW = 860,
@@ -353,7 +354,7 @@ function startAutoSave() {
 
 function saveTempState() {
   try {
-    sessionStorage.setItem(TEMP_KEY, JSON.stringify(collectState()));
+    writeTransfer(collectState());
   } catch {}
 }
 
@@ -1403,7 +1404,18 @@ function initAddField() {
   _addFieldInitialized = true;
   const modal = $("field-modal");
   $("add-field-btn").addEventListener("click", () => {
+    $("new-field-type").value = "input";
+    $("new-field-icon").value = "scroll";
     modal.style.display = "flex";
+    $("new-field-label").focus();
+  });
+  $("add-photo-btn").addEventListener("click", () => {
+    $("new-field-type").value = "photo";
+    $("new-field-icon").value = "photo";
+    $("new-field-label").value = "Фото";
+    modal.style.display = "flex";
+    $("new-field-label").focus();
+    $("new-field-label").select();
   });
   $("modal-cancel").addEventListener("click", () => {
     modal.style.display = "none";
@@ -1464,6 +1476,10 @@ async function uploadExtraPhotosInList(list) {
     f.photo.src = await uploadImageToCloudinary(f.photo.src, {
       folder: "character-sheet/portraits",
     });
+    const liveField = [...S.customFields, ...S.customFields2].find(
+      (field) => field.id === f.id,
+    );
+    if (liveField) ensureExtraPhoto(liveField).src = f.photo.src;
     const img = document.querySelector(
       `[data-field-id="${f.id}"] .extra-photo-img`,
     );
@@ -1999,16 +2015,18 @@ function initButtons() {
   $("cloud-save-btn").addEventListener("click", saveToCloud);
   $("new-char-btn").addEventListener("click", () => {
     if (confirm("Создать нового?")) {
-      sessionStorage.removeItem(TEMP_KEY);
+      clearTransfer();
       S.currentCharacterId = null;
-      location.reload();
+      // Drop a bookmarked ?id as well, otherwise startup reloads that character.
+      location.href = "/editor";
     }
   });
   $("clear-btn").addEventListener("click", () => {
     if (confirm("Сбросить всё?")) {
-      sessionStorage.removeItem(TEMP_KEY);
+      clearTransfer();
       S.currentCharacterId = null;
-      location.reload();
+      // Drop a bookmarked ?id as well, otherwise startup reloads that character.
+      location.href = "/editor";
     }
   });
   $("export-btn").addEventListener("click", handleExport);

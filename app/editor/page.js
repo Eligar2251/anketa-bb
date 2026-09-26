@@ -1,9 +1,10 @@
 // FILE: app/editor/page.js
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { initApp, resetAppInit } from "../../components/Logic";
+import { prepareEditorState } from "../../lib/editorState";
 
 function EditorLoading() {
   return (
@@ -53,19 +54,37 @@ function EditorLoading() {
 }
 
 function EditorPageInner() {
+  const [booting, setBooting] = useState(true);
+  const [loadError, setLoadError] = useState("");
   useEffect(() => {
+    let cancelled = false;
     resetAppInit();
-    const raf = requestAnimationFrame(() => {
+    prepareEditorState().then(() => {
+      if (cancelled) return;
       initApp();
+      setBooting(false);
+    }).catch((error) => {
+      if (!cancelled) setLoadError(error.message || "Ошибка загрузки анкеты");
     });
     return () => {
-      cancelAnimationFrame(raf);
+      cancelled = true;
       resetAppInit();
     };
   }, []);
 
   return (
     <>
+      {booting && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 10000 }}>
+          <EditorLoading />
+          {loadError && (
+            <div role="alert" style={{ position: "absolute", top: "60%", width: "100%", textAlign: "center", color: "#f5e6c8" }}>
+              <p>{loadError}</p>
+              <a href="/" style={{ color: "#c49050" }}>Вернуться в галерею</a>
+            </div>
+          )}
+        </div>
+      )}
       {/* ======== ПАНЕЛЬ УПРАВЛЕНИЯ ======== */}
       <div id="control-panel">
         <div id="controls-left">
@@ -136,6 +155,9 @@ function EditorPageInner() {
           </button>
           <button className="ctrl-btn" id="add-field-btn">
             ＋ Поле
+          </button>
+          <button className="ctrl-btn" id="add-photo-btn" title="Добавить фото с подписью">
+            ＋ Фото
           </button>
           <button className="ctrl-btn" id="add-divider-btn">
             — Разделитель

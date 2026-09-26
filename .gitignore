@@ -32,3 +32,6 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
+# browser tests
+test-results/
+playwright-report/
