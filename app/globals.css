@@ -766,49 +766,65 @@ body {
 .erythrogen-block {
   position: relative;
   flex-shrink: 0;
-  padding: 18px 56px 18px 0;
+  padding: 16px 48px 16px 0;
   border-top: 1px solid rgba(122, 74, 26, 0.2);
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 
 .erythrogen-header {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 18px;
+  gap: 0.45em;
+  margin-bottom: 12px;
+  min-width: 0;
+}
+
+.erythrogen-header .field-icon-wrap {
+  width: calc(var(--ery-title-font-size) * 1.55);
+}
+
+.erythrogen-header .ficon {
+  width: calc(var(--ery-title-font-size) * 1.45);
+  height: calc(var(--ery-title-font-size) * 1.45);
 }
 
 .erythrogen-title {
   font-family: "Uncial Antiqua", "Cormorant Garamond", serif;
   font-size: var(--ery-title-font-size) !important;
+  line-height: 1.15;
   color: #7a1a1a;
-  letter-spacing: 4px;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .erythrogen-row {
   display: flex;
   align-items: center;
-  gap: 0;
-  flex-wrap: nowrap;
-  overflow: hidden;
+  gap: 0.4em;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .rank-badge {
-  width: 84px;
-  height: 84px;
-  border: 3px solid #8b0000;
+  --badge-size: calc(var(--ery-font-size) * 1.22);
+  width: var(--badge-size);
+  height: var(--badge-size);
+  border: 2px solid #8b0000;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   background: rgba(139, 0, 0, 0.07);
+  box-sizing: border-box;
 }
 
 .rank-letter {
   font-family: "Cormorant Garamond", serif;
-  font-size: 60px;
+  font-size: calc(var(--ery-font-size) * 0.78);
   font-weight: 700;
   color: #8b0000;
   line-height: 1;
@@ -822,10 +838,13 @@ body {
   background: transparent;
   border: none;
   outline: none;
-  width: 180px;
+  width: 4.6ch;
+  min-width: 2.8ch;
+  max-width: 8ch;
   text-align: left;
   padding: 0;
-  margin-left: 20px;
+  margin: 0;
+  line-height: 1;
   -moz-appearance: textfield;
 }
 
@@ -837,10 +856,10 @@ body {
 .rank-info-inline {
   display: flex;
   align-items: baseline;
-  gap: 0;
-  margin-left: 6px;
-  overflow: hidden;
-  white-space: nowrap;
+  flex: 1 1 12em;
+  min-width: 0;
+  gap: 0.2em;
+  line-height: 1.2;
 }
 
 .rank-info-inline.hidden {
@@ -848,34 +867,41 @@ body {
 }
 
 .rank-dot {
+  font-family: "Cormorant Garamond", serif;
   font-size: var(--rank-name-font-size);
+  line-height: 1.2;
   color: #8b5a1a;
-  opacity: 0.4;
+  opacity: 0.45;
   flex-shrink: 0;
-  margin: 0 4px;
+  margin: 0;
 }
 
 .rank-name {
   font-family: "Philosopher", serif;
   font-size: var(--rank-name-font-size);
+  line-height: 1.2;
   color: #3b1f0a;
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .rank-range {
   font-family: "Cormorant Garamond", serif;
   font-size: var(--rank-range-font-size);
+  line-height: 1.2;
   color: #8b5a1a;
   font-style: italic;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ery-hint-toggle {
   flex-shrink: 0;
-  margin-left: 10px;
+  margin-left: auto;
   background: rgba(122, 74, 26, 0.1);
   border: 1px solid rgba(122, 74, 26, 0.25);
   color: #7a4a1a;

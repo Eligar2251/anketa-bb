@@ -4,18 +4,6 @@
 import { useEffect } from "react";
 import dynamic from "next/dynamic";
 import { initApp, resetAppInit } from "../../components/Logic";
-import {
-  goToDesign,
-  getStoredCharacterId,
-  buildV2Url,
-} from "../../lib/transfer";
-
-// Переключение на новый дизайн (v2) в отдельной вкладке.
-// Старый дизайн и его логика (Logic.js) при этом никак не меняются.
-function handleOpenV2() {
-  const id = getStoredCharacterId();
-  goToDesign(buildV2Url(id), { openInNewTab: true });
-}
 
 function EditorLoading() {
   return (
@@ -168,14 +156,6 @@ function EditorPageInner() {
             title="Анкета для двух персонажей"
           >
             👥 Двойная
-          </button>
-          <button
-            className="ctrl-btn"
-            id="open-v2-btn"
-            onClick={handleOpenV2}
-            title="Открыть эту же анкету в новом дизайне (викторианский герб) в отдельной вкладке"
-          >
-            ❖ Дизайн v2
           </button>
           <div className="sep" />
           <button className="ctrl-btn" id="new-char-btn">
