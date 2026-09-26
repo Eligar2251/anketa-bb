@@ -7,7 +7,6 @@ import {
   TEMP_KEY as TRANSFER_TEMP_KEY,
   writeTransfer,
   clearTransfer,
-  buildV2Url,
 } from "../lib/transfer";
 
 const ROLE_NAMES = {
@@ -268,7 +267,6 @@ export default function GalleryPage() {
   const [hoveredId, setHoveredId] = useState(null);
   const [imgErrors, setImgErrors] = useState(new Set());
   const [loadingCharId, setLoadingCharId] = useState(null);
-  const [loadingDesign, setLoadingDesign] = useState(null);
   const [dragId, setDragId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
   const dragRef = useRef(null);
@@ -353,15 +351,10 @@ export default function GalleryPage() {
     }
   }
 
-  // Открытие анкеты в выбранном дизайне:
-  // v1 (свиток) — в той же вкладке, v2 (герб) — в отдельной вкладке.
-  // Формат данных общий, поэтому любая анкета автоматически
-  // перестраивается под новый дизайн.
-  async function handleLoad(char, design = "v1") {
+  async function handleLoad(char) {
     const db = getSupabase();
     if (!db) return;
     setLoadingCharId(char.id);
-    setLoadingDesign(design);
     try {
       const { data, error } = await db
         .from("characters")
@@ -375,7 +368,6 @@ export default function GalleryPage() {
       if (!payload || typeof payload !== "object") payload = {};
       payload.currentCharacterId = char.id;
 
-      // Если двойная анкета — объединяем данные второго персонажа
       if (data.is_duo && data.duo_partner_data) {
         const dp =
           typeof data.duo_partner_data === "string"
@@ -390,20 +382,11 @@ export default function GalleryPage() {
       }
 
       writeTransfer(payload);
-      if (design === "v2") {
-        // Отдельная вкладка + ?id= как страховка (v2 подтянет из облака
-        // даже если хранилище вкладки недоступно)
-        window.open(buildV2Url(char.id), "_blank", "noopener");
-        setLoadingCharId(null);
-        setLoadingDesign(null);
-      } else {
-        window.location.href = "/editor";
-      }
+      window.location.href = "/editor";
     } catch (e) {
       console.error("Load error:", e);
       alert("Ошибка загрузки: " + e.message);
       setLoadingCharId(null);
-      setLoadingDesign(null);
     }
   }
 
@@ -420,13 +403,9 @@ export default function GalleryPage() {
     }
   }
 
-  function handleCreateNew(design = "v1") {
+  function handleCreateNew() {
     clearTransfer();
-    if (design === "v2") {
-      window.open("/v2", "_blank", "noopener");
-    } else {
-      window.location.href = "/editor";
-    }
+    window.location.href = "/editor";
   }
 
   return (
@@ -554,8 +533,8 @@ export default function GalleryPage() {
             </div>
             <div style={{ display: "flex", gap: "10px" }}>
               <button
-                onClick={() => handleCreateNew("v1")}
-                title="Новый персонаж в старом дизайне (свиток)"
+                onClick={() => handleCreateNew()}
+                title="Новая анкета"
                 style={{
                   background: "linear-gradient(135deg,#3b1f0a,#5a2e0e)",
                   color: "#f5e6c8",
@@ -582,38 +561,7 @@ export default function GalleryPage() {
                   e.currentTarget.style.transform = "translateY(0)";
                 }}
               >
-                📜 Создать · Свиток
-              </button>
-              <button
-                onClick={() => handleCreateNew("v2")}
-                title="Новый персонаж в новом дизайне (викторианский герб) — откроется в отдельной вкладке"
-                style={{
-                  background: "linear-gradient(135deg,#5a4a0a,#8b6914)",
-                  color: "#fff8e0",
-                  border: "2px solid #daa520",
-                  padding: "9px 22px",
-                  fontSize: "14px",
-                  fontWeight: "600",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  letterSpacing: "1px",
-                  transition: "all 0.2s",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background =
-                    "linear-gradient(135deg,#8b6914,#b8860b)";
-                  e.currentTarget.style.borderColor = "#ffe4a0";
-                  e.currentTarget.style.transform = "translateY(-1px)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background =
-                    "linear-gradient(135deg,#5a4a0a,#8b6914)";
-                  e.currentTarget.style.borderColor = "#daa520";
-                  e.currentTarget.style.transform = "translateY(0)";
-                }}
-              >
-                ❖ Создать · Герб
+                ✦ Создать
               </button>
             </div>
           </div>
@@ -713,8 +661,6 @@ export default function GalleryPage() {
                     const isHovered = hoveredId === char.id;
                     const hasImgErr = imgErrors.has(char.id);
                     const isLoading = loadingCharId === char.id;
-                    const isLoadingV1 = isLoading && loadingDesign === "v1";
-                    const isLoadingV2 = isLoading && loadingDesign === "v2";
                     const isDragOver =
                       dragOverId === char.id && dragId !== char.id;
 
@@ -938,7 +884,6 @@ export default function GalleryPage() {
                           }}
                         />
 
-                        {/* Кнопки: переключение между дизайнами */}
                         <div
                           style={{
                             display: "flex",
@@ -949,10 +894,10 @@ export default function GalleryPage() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleLoad(char, "v1");
+                              handleLoad(char);
                             }}
                             disabled={isLoading}
-                            title="Открыть в старом дизайне (свиток)"
+                            title="Открыть анкету"
                             style={{
                               flex: 1,
                               border: "none",
@@ -969,32 +914,7 @@ export default function GalleryPage() {
                               borderRight: `1px solid ${rs.border}35`,
                             }}
                           >
-                            {isLoadingV1 ? "⏳ ..." : "📜 Свиток"}
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleLoad(char, "v2");
-                            }}
-                            disabled={isLoading}
-                            title="Открыть в новом дизайне (викторианский герб) в отдельной вкладке"
-                            style={{
-                              flex: 1,
-                              border: "none",
-                              background: isHovered
-                                ? "linear-gradient(135deg,#8b6914,#b8860b)"
-                                : "linear-gradient(135deg,#6a5a10,#8b6914)",
-                              color: "#fff8e0",
-                              padding: "11px 6px",
-                              cursor: isLoading ? "wait" : "pointer",
-                              fontSize: "13px",
-                              fontWeight: "600",
-                              letterSpacing: "0.3px",
-                              transition: "background 0.2s",
-                              borderRight: `1px solid ${rs.border}35`,
-                            }}
-                          >
-                            {isLoadingV2 ? "⏳ ..." : "❖ Герб"}
+                            {isLoading ? "⏳ ..." : "Открыть"}
                           </button>
                           <button
                             onClick={(e) => {

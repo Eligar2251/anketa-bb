@@ -25,6 +25,7 @@ export async function exportSheetToPNG(sheetElement, options = {}) {
   // 2. Удаляем все UI-элементы из клона
   clone.querySelectorAll('.ui-only').forEach(el => el.remove());
   clone.querySelectorAll('.portrait-placeholder span').forEach(el => el.remove());
+  clone.querySelectorAll('.extra-photo-placeholder span').forEach(el => el.remove());
 
   // 3. Создаём временный контейнер
   const container = document.createElement('div');
