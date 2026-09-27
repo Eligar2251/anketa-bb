@@ -1230,7 +1230,14 @@ function initErythrogenUnit(sfx = "") {
     info = $("rank-info-inline" + sfx),
     tog = $("ery-hint-toggle" + sfx);
 
+  const measure = document.createElement("canvas").getContext("2d");
+
   function upd() {
+    // Ширина по содержимому, включая «ед.»: название не отделяется
+    // от числа пустым местом стандартного input. em сохраняет масштаб.
+    const style = getComputedStyle(inp);
+    measure.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    inp.style.width = `${measure.measureText(inp.value || inp.placeholder || "0").width / parseFloat(style.fontSize) + 0.04}em`;
     const raw = (inp.value || "").trim();
     const m = raw.match(/^\d+/);
     const v = m ? parseInt(m[0], 10) : NaN;
@@ -2665,9 +2672,10 @@ async function exportToPNG(ret = false) {
     // Число уровня — часть той же строки, что и значок: берём его реальный
     // бокс и центрируем цифру по общей горизонтальной оси
     const r = inp.getBoundingClientRect();
+    const numberStyle = getComputedStyle(inp);
     const d = makeDiv(
       v || "0",
-      `font-family:'Cormorant Garamond',serif;font-size:${S.eryFontSize}px;font-weight:700;color:${theme.numberColor};background:transparent;border:none;padding:0;margin:0;flex:0 0 auto;width:${Math.round(r.width)}px;height:${Math.round(r.height)}px;display:flex;align-items:center;line-height:1;opacity:${v ? "1" : "0.3"};`,
+      `font-family:${numberStyle.fontFamily};font-variant-numeric:${numberStyle.fontVariantNumeric};font-size:${S.eryFontSize}px;font-weight:700;color:${theme.numberColor};background:transparent;border:none;padding:0;margin:0;flex:0 0 auto;width:${Math.round(r.width)}px;height:${Math.round(r.height)}px;display:flex;align-items:center;line-height:1;opacity:${v ? "1" : "0.3"};`,
     );
     inp.before(d);
     inp.style.display = "none";

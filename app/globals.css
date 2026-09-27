@@ -1170,7 +1170,7 @@ body {
   display: flex;
   align-items: center;
   flex: 1 1 auto;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: calc(var(--ery-font-size) * 0.22);
   min-width: 0;
   line-height: 1;
@@ -1199,7 +1199,10 @@ body {
 }
 
 .ery-number-input {
-  font-family: "Cormorant Garamond", serif;
+  /* Прямые цифры одной высоты вместо минускульных в Cormorant. */
+  font-family: "Times New Roman", Times, serif;
+  font-variant-numeric: lining-nums tabular-nums;
+  flex-shrink: 0;
   font-size: var(--ery-font-size) !important;
   font-weight: 700;
   color: #8b0000;
@@ -2179,14 +2182,13 @@ body {
   display: none;
 }
 
-/* Эритрогены: в узкой колонке пояснение уровня уходит на свою строку,
-   но остаётся частью той же системы (общая ось и общий масштаб) */
+/* В двойном режиме название тоже остаётся сразу после числа. */
 .dual-mode .ery-level {
   gap: calc(var(--ery-font-size) * 0.16);
 }
 
 .dual-mode .rank-info-inline {
-  flex: 1 1 100%;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
