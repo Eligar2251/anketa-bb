@@ -88,6 +88,9 @@ let _addFieldInitialized = false;
 let _dividerInitialized = false;
 let _statusInitialized = false;
 let _reputationInitialized = false;
+let _extraPhotoInitialized = false;
+let _extraPhotoTarget = null;
+let _extraPhotoDrag = null;
 
 const ROLE_DISPLAY_NAMES = {
   "": "Стандартная",
@@ -276,6 +279,7 @@ export function initApp() {
   initPan();
   initZoom();
   initPortrait();
+  initExtraPhotos();
   initBackground();
   initSheetResize();
   initSheetResizeX();
@@ -341,6 +345,9 @@ export function resetAppInit() {
   _dividerInitialized = false;
   _statusInitialized = false;
   _reputationInitialized = false;
+  _extraPhotoInitialized = false;
+  _extraPhotoTarget = null;
+  _extraPhotoDrag = null;
 
   if (S.autoSaveTimer) {
     clearInterval(S.autoSaveTimer);
@@ -385,9 +392,15 @@ function collectState() {
   // Подхватываем кастомные поля
   fieldsList?.querySelectorAll(".custom-field-row").forEach((row) => {
     const id = row.dataset.fieldId;
-    const inp = row.querySelector("input,textarea");
     const cf = S.customFields.find((f) => f.id === id);
-    if (cf && inp) cf.value = inp.value;
+    if (!cf) return;
+    if (cf.type === "photo") {
+      const cap = row.querySelector(".extra-photo-caption");
+      if (cap) cf.label = cap.value;
+      return;
+    }
+    const inp = row.querySelector("input,textarea");
+    if (inp) cf.value = inp.value;
   });
   // Подхватываем девиз и узы напрямую из textarea (на случай рассинхрона)
   const mottoEl = $("v2-motto-input");
@@ -409,8 +422,14 @@ function collectState() {
     fields2: S._savedFields2 || {},
     hidden: [...S.hiddenFields],
     hidden2: [...S.hiddenFields2],
-    customFields: S.customFields.map((f) => ({ ...f })),
-    customFields2: S.customFields2.map((f) => ({ ...f })),
+    customFields: S.customFields.map((f) => ({
+      ...f,
+      photo: f.photo ? { ...f.photo } : undefined,
+    })),
+    customFields2: S.customFields2.map((f) => ({
+      ...f,
+      photo: f.photo ? { ...f.photo } : undefined,
+    })),
     customCounter: S.customCounter,
     dividerCounter: S.dividerCounter,
     role: S.role,
@@ -930,6 +949,7 @@ function initPan() {
       if (
         e.target.closest(".portrait-area") ||
         e.target.closest(".portrait-medallion") ||
+        e.target.closest(".extra-photo-area") ||
         e.target.closest("#sheet-bg-layer")
       )
         return;
@@ -1515,7 +1535,17 @@ function initAddField() {
   _addFieldInitialized = true;
   const modal = $("field-modal");
   $("add-field-btn").addEventListener("click", () => {
+    const type = $("new-field-type");
+    const icon = $("new-field-icon");
+    const label = $("new-field-label");
+    if (type) type.value = "input";
+    if (icon) icon.value = "scroll";
+    if (label) label.value = "";
     modal.style.display = "flex";
+    label?.focus();
+  });
+  $("add-photo-btn")?.addEventListener("click", () => {
+    addPhotoField("Фото");
   });
   $("modal-cancel").addEventListener("click", () => {
     modal.style.display = "none";
@@ -1533,19 +1563,29 @@ function initAddField() {
     }
     S.customCounter++;
     const id = `custom_${S.customCounter}`;
-    const fL = { id, label, type, icon, value: "" };
+    const fL = makeCustomField(id, label, type, icon);
     S.customFields.push(fL);
-    renderCustomField(fL);
+    renderCustomField(fL, null, type === "photo" ? "start" : "end");
+    if (S.dualMode) {
+      S.customFields2.push(
+        makeCustomField(`r-custom_${S.customCounter}`, label, type, icon),
+      );
+    }
     autoFitSheetHeight();
+    if (type === "photo") fitToScreen();
     $("new-field-label").value = "";
     modal.style.display = "none";
     updateFieldOrder();
     saveTempState();
   });
 }
-function renderCustomField(f, container = null) {
+function renderCustomField(f, container = null, place = "end") {
   const c = container || fieldsList;
   if (!c || c.querySelector(`[data-field-id="${f.id}"]`)) return;
+  if (f.type === "photo") {
+    renderCustomPhotoField(f, c, place);
+    return;
+  }
   const w = document.createElement("div");
   w.className = "custom-field-row";
   w.dataset.fieldId = f.id;
@@ -1569,6 +1609,311 @@ function renderCustomField(f, container = null) {
     saveTempState();
   });
   c.appendChild(w);
+}
+
+function makeCustomField(id, label, type, icon) {
+  const f = { id, label, type, icon, value: "" };
+  if (type === "photo") f.photo = emptyExtraPhoto();
+  return f;
+}
+
+function emptyExtraPhoto() {
+  return { src: "", x: 0, y: 0, sc: 1, nw: 0, nh: 0 };
+}
+
+function hydrateCustomField(f) {
+  const out = { ...f };
+  if (out.type === "photo") {
+    out.photo = { ...emptyExtraPhoto(), ...(f.photo || {}) };
+  }
+  return out;
+}
+
+function addPhotoField(label = "Фото") {
+  const photos = S.customFields.filter((f) => f.type === "photo").length;
+  let caption = (label || "Фото").trim() || "Фото";
+  if (photos && caption === "Фото") caption = `Фото ${photos + 1}`;
+  S.customCounter++;
+  const id = `custom_${S.customCounter}`;
+  const fL = makeCustomField(id, caption, "photo", "photo");
+  S.customFields.push(fL);
+  renderCustomField(fL, null, "start");
+  if (S.dualMode) {
+    S.customFields2.push(
+      makeCustomField(`r-custom_${S.customCounter}`, caption, "photo", "photo"),
+    );
+  }
+  updateFieldOrder();
+  saveTempState();
+  if (autoFitSheetHeight()) fitToScreen();
+  showToast("Фото добавлено — нажмите на ячейку, чтобы загрузить");
+  const cap = document.querySelector(
+    `[data-field-id="${id}"] .extra-photo-caption`,
+  );
+  cap?.focus();
+  cap?.select();
+}
+
+async function uploadExtraPhotosInList(list) {
+  if (!Array.isArray(list)) return;
+  for (const f of list) {
+    if (f.type !== "photo" || !f.photo?.src || !isDataUrl(f.photo.src)) continue;
+    showToast("Загрузка фото...");
+    f.photo.src = await uploadImageToCloudinary(f.photo.src, {
+      folder: "character-sheet/portraits",
+    });
+    const liveField = [...S.customFields, ...S.customFields2].find(
+      (field) => field.id === f.id,
+    );
+    if (liveField) ensureExtraPhoto(liveField).src = f.photo.src;
+    const img = document.querySelector(
+      `[data-field-id="${f.id}"] .extra-photo-img`,
+    );
+    if (img) img.src = f.photo.src;
+  }
+}
+
+function ensureExtraPhoto(f) {
+  if (!f.photo || typeof f.photo !== "object") f.photo = emptyExtraPhoto();
+  return f.photo;
+}
+
+function renderCustomPhotoField(f, container, place = "end") {
+  const p = ensureExtraPhoto(f);
+  const w = document.createElement("div");
+  w.className = "custom-field-row extra-photo-row";
+  w.dataset.fieldId = f.id;
+  const ic = getIconForField(f.icon || "photo");
+  const has = !!(p.src && p.src !== "loading");
+  w.innerHTML = `<div class="field-delete-btn ui-only" data-target="${f.id}" title="Удалить">✕</div>
+    <div class="field-icon-wrap">${ic}</div>
+    <div class="field-content extra-photo-content">
+      <input type="text" class="field-label extra-photo-caption" maxlength="40" placeholder="Подпись (например, Лицо)" autocomplete="off" />
+      <div class="extra-photo-area">
+        <div class="extra-photo-placeholder"${has ? ' style="display:none"' : ""}>
+          <span>Нажмите, чтобы загрузить фото</span>
+        </div>
+        <div class="extra-photo-wrapper${has ? " active" : ""}">
+          <img class="extra-photo-img" alt="" draggable="false" />
+        </div>
+        <div class="extra-photo-hint ui-only${has ? " visible" : ""}">Колёсико — масштаб · перетащите кадр</div>
+        <div class="portrait-actions extra-photo-actions ui-only" style="display:${has ? "flex" : "none"}">
+          <button type="button" class="portrait-change-btn extra-photo-change" title="Заменить">🔄</button>
+          <button type="button" class="portrait-delete-btn extra-photo-clear" title="Удалить фото">🗑</button>
+        </div>
+      </div>
+    </div>`;
+  const cap = w.querySelector(".extra-photo-caption");
+  cap.value = f.label || "";
+  cap.addEventListener("input", () => {
+    f.label = cap.value;
+  });
+  cap.addEventListener("change", () => {
+    f.label = cap.value;
+    saveTempState();
+  });
+  bindExtraPhotoField(f, w);
+  if (place === "start" && container.firstChild)
+    container.insertBefore(w, container.firstChild);
+  else container.appendChild(w);
+  if (has) {
+    const img = w.querySelector(".extra-photo-img");
+    img.src = p.src;
+    img.onload = () => {
+      if (!p.nw) {
+        p.nw = img.naturalWidth;
+        p.nh = img.naturalHeight;
+        const areaW = w.querySelector(".extra-photo-area")?.clientWidth || 320;
+        if (!p.sc || p.sc === 1) p.sc = areaW / Math.max(p.nw, 1);
+      }
+      applyExtraPhotoTransform(f, img);
+    };
+  }
+}
+
+function extraPhotoEls(root) {
+  return {
+    area: root.querySelector(".extra-photo-area"),
+    wrap: root.querySelector(".extra-photo-wrapper"),
+    img: root.querySelector(".extra-photo-img"),
+    ph: root.querySelector(".extra-photo-placeholder"),
+    hint: root.querySelector(".extra-photo-hint"),
+    actions: root.querySelector(".extra-photo-actions"),
+  };
+}
+
+function applyExtraPhotoTransform(f, img) {
+  const p = ensureExtraPhoto(f);
+  if (!img) return;
+  img.style.width = (p.nw || 0) + "px";
+  img.style.height = (p.nh || 0) + "px";
+  img.style.transform = `translate(${p.x}px,${p.y}px) scale(${p.sc})`;
+}
+
+function bindExtraPhotoField(f, root) {
+  const els = extraPhotoEls(root);
+  const openPicker = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    _extraPhotoTarget = f;
+    $("extra-photo-input")?.click();
+  };
+  els.area.addEventListener("click", (e) => {
+    if (e.target.closest(".extra-photo-actions")) return;
+    const p = ensureExtraPhoto(f);
+    if (p.src && p.src !== "loading") return;
+    openPicker(e);
+  });
+  els.area.querySelector(".extra-photo-change")?.addEventListener("click", openPicker);
+  els.area.querySelector(".extra-photo-clear")?.addEventListener("click", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const p = ensureExtraPhoto(f);
+    if (!p.src || p.src === "loading") return;
+    if (!confirm("Удалить фото?")) return;
+    const oldSrc = p.src;
+    try {
+      if (oldSrc && !isDataUrl(oldSrc)) await deleteImageFromCloudinary(oldSrc);
+      Object.assign(p, emptyExtraPhoto());
+      els.wrap.classList.remove("active");
+      els.img.src = "";
+      els.ph.style.display = "";
+      els.hint.classList.remove("visible");
+      els.actions.style.display = "none";
+      saveTempState();
+      showToast("Фото удалено");
+    } catch {
+      showToast("Ошибка удаления", true);
+    }
+  });
+  els.img.addEventListener("mousedown", (e) => {
+    const p = ensureExtraPhoto(f);
+    if (!p.src || p.src === "loading") return;
+    e.stopPropagation();
+    e.preventDefault();
+    _extraPhotoDrag = {
+      f,
+      img: els.img,
+      sx: e.clientX,
+      sy: e.clientY,
+      stx: p.x,
+      sty: p.y,
+    };
+    els.img.classList.add("grabbing");
+  });
+  els.area.addEventListener(
+    "wheel",
+    (e) => {
+      const p = ensureExtraPhoto(f);
+      if (!p.src || p.src === "loading") return;
+      e.preventDefault();
+      e.stopPropagation();
+      const factor = e.deltaY < 0 ? 1.08 : 0.93;
+      const ns = clamp(p.sc * factor, 0.02, 30);
+      const rect = els.area.getBoundingClientRect();
+      const mx = (e.clientX - rect.left) / S.scale;
+      const my = (e.clientY - rect.top) / S.scale;
+      const px = (mx - p.x) / p.sc;
+      const py = (my - p.y) / p.sc;
+      p.sc = ns;
+      p.x = mx - px * ns;
+      p.y = my - py * ns;
+      applyExtraPhotoTransform(f, els.img);
+      saveTempState();
+    },
+    { passive: false },
+  );
+}
+
+function initExtraPhotos() {
+  if (_extraPhotoInitialized) return;
+  _extraPhotoInitialized = true;
+  const input = $("extra-photo-input");
+  if (!input) return;
+  input.addEventListener("change", (e) => {
+    const file = e.target.files?.[0];
+    input.value = "";
+    const f = _extraPhotoTarget;
+    _extraPhotoTarget = null;
+    if (!file || !f) return;
+    if (!file.type.startsWith("image/")) {
+      showToast("Файл не является изображением", true);
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      showToast("Файл слишком большой", true);
+      return;
+    }
+    loadExtraPhotoFile(f, file);
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (!_extraPhotoDrag) return;
+    const { f, img, sx, sy, stx, sty } = _extraPhotoDrag;
+    const p = ensureExtraPhoto(f);
+    p.x = stx + (e.clientX - sx) / S.scale;
+    p.y = sty + (e.clientY - sy) / S.scale;
+    applyExtraPhotoTransform(f, img);
+  });
+  window.addEventListener("mouseup", () => {
+    if (!_extraPhotoDrag) return;
+    _extraPhotoDrag.img?.classList.remove("grabbing");
+    _extraPhotoDrag = null;
+    saveTempState();
+  });
+}
+
+function loadExtraPhotoFile(f, file) {
+  const p = ensureExtraPhoto(f);
+  const prevSrc = p.src;
+  const root = document.querySelector(`[data-field-id="${f.id}"]`);
+  if (!root) return;
+  const els = extraPhotoEls(root);
+  p.src = "loading";
+  const sp = els.ph.querySelector("span");
+  if (sp) sp.textContent = "Загрузка...";
+  els.ph.style.display = "";
+  const url = URL.createObjectURL(file);
+  const tmp = new Image();
+  tmp.onload = () => {
+    convertToDataUrl(url, tmp.naturalWidth, tmp.naturalHeight, async (dataUrl) => {
+      URL.revokeObjectURL(url);
+      if (!dataUrl) {
+        Object.assign(p, emptyExtraPhoto());
+        if (sp) sp.textContent = "Нажмите, чтобы загрузить фото";
+        showToast("Ошибка загрузки", true);
+        return;
+      }
+      try {
+        if (prevSrc && !isDataUrl(prevSrc) && prevSrc !== "loading")
+          await deleteImageFromCloudinary(prevSrc);
+      } catch {}
+      const areaW = els.area.clientWidth || 320;
+      p.src = dataUrl;
+      p.nw = tmp.naturalWidth;
+      p.nh = tmp.naturalHeight;
+      p.sc = areaW / Math.max(tmp.naturalWidth, 1);
+      p.x = 0;
+      p.y = 0;
+      els.img.src = dataUrl;
+      els.img.onload = () => {
+        els.wrap.classList.add("active");
+        els.ph.style.display = "none";
+        if (sp) sp.textContent = "Нажмите, чтобы загрузить фото";
+        els.hint.classList.add("visible");
+        els.actions.style.display = "flex";
+        applyExtraPhotoTransform(f, els.img);
+        saveTempState();
+        autoFitSheetHeight();
+      };
+    });
+  };
+  tmp.onerror = () => {
+    URL.revokeObjectURL(url);
+    Object.assign(p, emptyExtraPhoto());
+    if (sp) sp.textContent = "Нажмите, чтобы загрузить фото";
+    showToast("Ошибка чтения файла", true);
+  };
+  tmp.src = url;
 }
 
 function getIconForField(name) {
@@ -1644,6 +1989,9 @@ function getIconForField(name) {
     ),
     inventory: wrap(
       `<rect x="6" y="14" width="24" height="16" rx="2"/><path d="M12 14 V8 Q12 6 14 6 H22 Q24 6 24 8 V14"/><line x1="18" y1="20" x2="18" y2="24"/>`,
+    ),
+    photo: wrap(
+      `<rect x="6" y="8" width="24" height="20" rx="2"/><circle cx="13" cy="15" r="2.2" fill="currentColor"/><path d="M8 24 L14 17 L19 22 L23 18 L28 24"/>`,
     ),
     location: wrap(
       `<path d="M18 30 Q8 22 8 14 Q8 6 18 6 Q28 6 28 14 Q28 22 18 30 Z"/><circle cx="18" cy="14" r="4"/>`,
@@ -1982,6 +2330,20 @@ function getExportTheme() {
   return b;
 }
 
+function bakeExtraPhotosForExport() {
+  const prev = [];
+  sheet.querySelectorAll(".extra-photo-img").forEach((img) => {
+    const id = img.closest("[data-field-id]")?.dataset.fieldId;
+    const f = [...S.customFields, ...S.customFields2].find((field) => field.id === id);
+    const p = f?.photo;
+    prev.push([img, img.style.cssText]);
+    if (p?.src && p.src !== "loading" && p.nw) {
+      img.style.cssText = `transform:none;position:absolute;left:${p.x}px;top:${p.y}px;width:${p.nw * p.sc}px;height:${p.nh * p.sc}px;`;
+    }
+  });
+  return prev;
+}
+
 async function exportToPNG(ret = false) {
   const { default: html2canvas } = await import("html2canvas");
   const W = S.sheetW,
@@ -2011,7 +2373,18 @@ async function exportToPNG(ret = false) {
   const bP = bI?.style.cssText || "";
   if (bI)
     bI.style.cssText = `transform:none;position:absolute;left:${S.bg.x}px;top:${S.bg.y}px;width:${S.bg.nw * S.bg.sc}px;height:${S.bg.nh * S.bg.sc}px;`;
+  const extraPhotoPrev = bakeExtraPhotosForExport();
   const reps = [];
+  sheet.querySelectorAll(".extra-photo-caption").forEach((inp) => {
+    const v = inp.value || "";
+    const d = makeDiv(
+      v || inp.placeholder || "",
+      `font-family:'Uncial Antiqua','Cormorant Garamond',serif;font-size:${S.labelFontSize}px;color:#8b6914;letter-spacing:4px;text-transform:uppercase;display:block;width:100%;line-height:1.2;background:transparent;border:none;padding:0 0 8px;`,
+    );
+    inp.before(d);
+    inp.style.display = "none";
+    reps.push([inp, d]);
+  });
 
   // html2canvas не рендерит inline-SVG с width="100%" (разделители,
   // заголовок «Хроника» и т.п.) — задаём им явные пиксельные размеры,
@@ -2046,7 +2419,7 @@ async function exportToPNG(ret = false) {
   // Все input/textarea (девиз и узы обрабатываются ниже отдельно)
   sheet
     .querySelectorAll(
-      'input[type="text"]:not(.header-name-input):not(.ery-number-input),input:not([type]):not(.header-name-input)',
+      'input[type="text"]:not(.header-name-input):not(.ery-number-input):not(.extra-photo-caption),input:not([type]):not(.header-name-input):not(.extra-photo-caption)',
     )
     .forEach((inp) => {
       if (
@@ -2187,6 +2560,9 @@ async function exportToPNG(ret = false) {
     });
     if (pI) pI.style.cssText = pP;
     if (bI) bI.style.cssText = bP;
+    extraPhotoPrev.forEach(([img, css]) => {
+      img.style.cssText = css;
+    });
     reps.forEach(([o, r]) => {
       o.style.display = "";
       r.remove();
@@ -2245,6 +2621,8 @@ async function saveToCloud() {
       cd.bg.src = bu;
       S.bg.src = bu;
     }
+    await uploadExtraPhotosInList(cd.customFields);
+    await uploadExtraPhotosInList(cd.customFields2);
     const payload = {
       name,
       image_url: pUrl || null,
@@ -2421,9 +2799,9 @@ function applyLoadedData(d) {
   if (Array.isArray(d.hidden2))
     d.hidden2.forEach((id) => S.hiddenFields2.add(id));
   if (Array.isArray(d.customFields))
-    S.customFields = d.customFields.map((f) => ({ ...f }));
+    S.customFields = d.customFields.map(hydrateCustomField);
   if (Array.isArray(d.customFields2))
-    S.customFields2 = d.customFields2.map((f) => ({ ...f }));
+    S.customFields2 = d.customFields2.map(hydrateCustomField);
   if (typeof d.customCounter === "number") S.customCounter = d.customCounter;
   if (typeof d.dividerCounter === "number") S.dividerCounter = d.dividerCounter;
   if (d.role !== undefined) S.role = d.role;

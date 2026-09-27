@@ -8,9 +8,11 @@ const photo = {
 
 async function addPhoto(page, caption = 'Лицо') {
   await page.locator('#add-photo-btn').click();
-  await expect(page.locator('#new-field-type')).toHaveValue('photo');
-  await page.locator('#new-field-label').fill(caption);
-  await page.locator('#modal-confirm').click();
+  const row = page.locator('#fields-list .extra-photo-row').last();
+  await expect(row).toBeVisible();
+  const cap = row.locator('.extra-photo-caption');
+  await cap.fill(caption);
+  await cap.blur();
 }
 
 async function uploadPhoto(page) {
@@ -23,7 +25,7 @@ async function uploadPhoto(page) {
   return row;
 }
 
-test('old /v2 bookmark opens the single editor and preserves its draft', async ({ page }) => {
+test('old links open the standard anketa, not a separate design', async ({ page }) => {
   await page.addInitScript(({ key }) => {
     sessionStorage.setItem(key, JSON.stringify({
       currentCharacterId: 'legacy-character', fields: { 'header-name-input': 'Старая анкета' },
@@ -33,11 +35,30 @@ test('old /v2 bookmark opens the single editor and preserves its draft', async (
   await page.goto('/v2?id=legacy-character&from=bookmark');
   await expect(page).toHaveURL(/\/editor\?id=legacy-character&from=bookmark/);
   await expect(page.locator('#header-name-input')).toHaveValue('Старая анкета');
-  await expect(page.locator('#add-photo-btn')).toBeVisible();
   await expect(page.locator('.v2-sigil-block')).toHaveCount(0);
+  await expect(page.locator('#add-photo-btn')).toBeVisible();
+  await expect(page.locator('#dual-mode-btn')).toBeVisible();
+  await expect(page.getByText(/герб/i)).toHaveCount(0);
+  await expect(page.getByText(/свиток/i)).toHaveCount(0);
+  await page.locator('#add-field-btn').click();
+  await expect(page.locator('#new-field-icon option[value="scroll"]')).toHaveText('Анкета');
+  await page.locator('#modal-cancel').click();
   await addPhoto(page);
   expect(await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key)).motto, TEMP_KEY))
     .toBe('Сохранённый девиз');
+});
+
+test('gallery opens only the standard anketa', async ({ page }) => {
+  await page.route('https://sheet-test.supabase.co/**', (route) => route.fulfill({ json: [] }));
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Анкета' })).toBeVisible();
+  await expect(page.getByText(/герб/i)).toHaveCount(0);
+  await expect(page.getByText(/свиток/i)).toHaveCount(0);
+  await page.getByRole('button', { name: 'Анкета' }).click();
+  await expect(page).toHaveURL(/\/editor$/);
+  await expect(page.locator('.v2-sigil-block')).toHaveCount(0);
+  await expect(page.locator('#add-photo-btn')).toBeVisible();
+  await expect(page.locator('#dual-mode-btn')).toBeVisible();
 });
 
 test('photo uploads, caption and crop survive reload, and clearing works', async ({ page }) => {

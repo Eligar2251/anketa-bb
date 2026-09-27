@@ -257,7 +257,7 @@ function SkeletonCard() {
   );
 }
 
-// Ключ хранилища — общий для Logic.js (v1) и LogicV2.js (v2)
+// Ключ хранилища черновика анкеты
 const TEMP_KEY = TRANSFER_TEMP_KEY;
 
 export default function GalleryPage() {
@@ -561,7 +561,7 @@ export default function GalleryPage() {
                   e.currentTarget.style.transform = "translateY(0)";
                 }}
               >
-                ✦ Создать
+                Анкета
               </button>
             </div>
           </div>
@@ -914,7 +914,7 @@ export default function GalleryPage() {
                               borderRight: `1px solid ${rs.border}35`,
                             }}
                           >
-                            {isLoading ? "⏳ ..." : "Открыть"}
+                            {isLoading ? "⏳ ..." : "Анкета"}
                           </button>
                           <button
                             onClick={(e) => {

@@ -63,6 +63,32 @@ body {
   display: flex;
   align-items: center;
   gap: 5px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+#controls-left::-webkit-scrollbar {
+  height: 4px;
+}
+
+#controls-left::-webkit-scrollbar-thumb {
+  background: rgba(139, 105, 20, 0.7);
+}
+
+.ctrl-btn,
+.ctrl-select-wrap,
+.sep,
+#zoom-label {
+  flex-shrink: 0;
+}
+
+.ctrl-btn.photo-add-btn {
+  border-color: #daa520;
+  color: #ffe4a0;
+  font-weight: 700;
 }
 
 .sep {
@@ -130,6 +156,8 @@ body {
 }
 
 #export-btn {
+  flex-shrink: 0;
+  margin-left: 8px;
   background: #3b1f0a;
   color: #f5e6c8;
   font-size: 14px;
@@ -283,7 +311,7 @@ body {
 }
 
 /* ============================================================
-   ЗАГОЛОВОК (СВИТОК + ИМЯ)
+   ЗАГОЛОВОК (АНКЕТА + ИМЯ)
    ============================================================ */
 .header-scroll {
   width: 100%;
@@ -317,7 +345,7 @@ body {
   flex: none;
 }
 
-/* SVG свитков — адаптивные */
+/* SVG шапки — адаптивные */
 .scroll-svg {
   display: block;
   width: 100%;
@@ -331,13 +359,13 @@ body {
   display: none !important;
 }
 
-/* Имя персонажа в свитке */
+/* Имя персонажа в шапке анкеты */
 .header-name-input {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 92%; /* Всегда почти на всю ширину свитка */
+  width: 92%; /* Всегда почти на всю ширину шапки */
   max-width: none;
   font-family: "Cormorant Garamond", serif;
   font-size: var(--name-font-size) !important;
@@ -363,7 +391,7 @@ body {
   letter-spacing: 8px;
 }
 
-/* Хэндлы ширины свитков */
+/* Хэндлы ширины шапки */
 
 /* ============================================================
    ОСНОВНАЯ СЕТКА
@@ -1796,7 +1824,7 @@ body {
   min-width: 2800px;
 }
 
-/* Свитки */
+/* Шапка анкеты */
 .dual-mode #scroll-wrap {
   display: grid !important;
   grid-template-columns: 1fr 860px 1fr !important;
@@ -1843,7 +1871,7 @@ body {
   min-width: 0;
 }
 
-/* SVG свитков — фиксированная высота */
+/* SVG шапки — фиксированная высота */
 .dual-mode .scroll-svg-half {
   width: 100% !important;
   height: 200px !important;
@@ -2505,7 +2533,7 @@ body.v2-app { background: #1a0e05 !important; }
 }
 
 /* ============================================================
-   v2 — СИМВОЛ РОДА (герб) — новый блок
+   Дополнительный блок символа рода
    ============================================================ */
 .v2-app .v2-sigil-block {
   position: relative;
