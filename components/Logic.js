@@ -81,6 +81,8 @@ let _dividerInitialized = false;
 let _extraPhotoInitialized = false;
 let _extraPhotoTarget = null;
 let _extraPhotoDrag = null;
+let _extraPhotoResize = null;
+let _extraPhotoSaveTimer = null;
 
 const ROLE_DISPLAY_NAMES = {
   "": "Стандартная",
@@ -327,6 +329,11 @@ export function resetAppInit() {
   _extraPhotoInitialized = false;
   _extraPhotoTarget = null;
   _extraPhotoDrag = null;
+  _extraPhotoResize = null;
+  if (_extraPhotoSaveTimer) {
+    clearTimeout(_extraPhotoSaveTimer);
+    _extraPhotoSaveTimer = null;
+  }
 
   if (S.autoSaveTimer) {
     clearInterval(S.autoSaveTimer);
@@ -751,7 +758,7 @@ function initPan() {
     (e) => {
       if (
         e.target.closest(".portrait-area") ||
-        e.target.closest(".extra-photo-area") ||
+        e.target.closest(".extra-photo-row") ||
         e.target.closest("#sheet-bg-layer")
       )
         return;
@@ -1478,7 +1485,9 @@ function addPhotoField(label = "Фото") {
 }
 
 function emptyExtraPhoto() {
-  return { src: "", x: 0, y: 0, sc: 1, nw: 0, nh: 0 };
+  // size — сторона квадратной ячейки (0 = размер по умолчанию),
+  // v — версия кадрирования: старые черновики вписывались по ширине
+  return { src: "", x: 0, y: 0, sc: 1, nw: 0, nh: 0, size: 0, v: 0 };
 }
 
 function hydrateCustomField(f) {
@@ -1542,6 +1551,267 @@ function renderCustomField(f, container = null, isR = false, place = "end") {
   c.appendChild(w);
 }
 
+// ============================================================
+// ФОТО-ЯЧЕЙКА: квадратный кадр, масштаб и размер ячейки
+// ============================================================
+
+const EP_PHOTO_VERSION = 2; // черновики старого формата вписывались иначе
+const EP_DEFAULT_SIZE = 360; // сторона квадрата по умолчанию, px
+const EP_SIZES = [200, 360, 520, 700]; // размеры для кнопки-переключателя
+const EP_MIN_SIZE = 140;
+const EP_MAX_SIZE = 900;
+const EP_MAX_ZOOM = 8; // предел увеличения относительно «вписанного» кадра
+const EP_ZOOM_STEP = 1.12;
+const EP_SAVE_DELAY = 400;
+
+const EP_PLACEHOLDER_ICON = `<svg class="ep-ph-icon" viewBox="0 0 36 36" aria-hidden="true"><rect x="4" y="6" width="28" height="24" rx="2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="3 3"/><path d="M18 12v12M12 18h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+
+function extraPhotoEls(root) {
+  return {
+    root,
+    content: root.querySelector(".extra-photo-content"),
+    area: root.querySelector(".extra-photo-area"),
+    wrap: root.querySelector(".extra-photo-wrapper"),
+    img: root.querySelector(".extra-photo-img"),
+    ph: root.querySelector(".extra-photo-placeholder"),
+    status: root.querySelector("[data-ep-status]"),
+    actions: root.querySelector(".extra-photo-actions"),
+    toolbar: root.querySelector(".extra-photo-toolbar"),
+    zoomValue: root.querySelector(".extra-photo-zoom-value"),
+    sizeChip: root.querySelector(".extra-photo-size"),
+    resize: root.querySelector(".extra-photo-resize"),
+  };
+}
+
+function extraPhotoHasImage(p) {
+  return !!(p && p.src && p.src !== "loading");
+}
+
+// Внешняя сторона квадрата (без вычета рамки) — её и показываем в панели
+function extraPhotoSize(area) {
+  return area?.offsetWidth || EP_DEFAULT_SIZE;
+}
+
+// Масштаб, при котором кадр целиком заполняет квадрат (без пустых полей)
+function extraPhotoCoverScale(p, area) {
+  const w = area?.clientWidth || 0;
+  const h = area?.clientHeight || 0;
+  if (!p?.nw || !p?.nh || !w || !h) return 0;
+  return Math.max(w / p.nw, h / p.nh);
+}
+
+function extraPhotoZoomPercent(p, area) {
+  const cover = extraPhotoCoverScale(p, area);
+  if (!cover || !p.sc) return 100;
+  return Math.max(1, Math.round((p.sc / cover) * 100));
+}
+
+function clampExtraPhotoScale(p, area, value) {
+  const cover = extraPhotoCoverScale(p, area);
+  if (!cover) return clamp(value, 0.02, 30);
+  return clamp(value, cover, cover * EP_MAX_ZOOM);
+}
+
+// Кадр не должен «уезжать» из квадрата: он либо прижат к краю, либо отцентрован
+function clampExtraPhotoPan(p, area) {
+  if (!area || !p.nw || !p.nh || !p.sc) return;
+  const w = area.clientWidth,
+    h = area.clientHeight;
+  const iw = p.nw * p.sc,
+    ih = p.nh * p.sc;
+  p.x = iw <= w ? (w - iw) / 2 : clamp(p.x, w - iw, 0);
+  p.y = ih <= h ? (h - ih) / 2 : clamp(p.y, h - ih, 0);
+}
+
+function applyExtraPhotoTransform(f, img, area = null) {
+  const p = ensureExtraPhoto(f);
+  if (!img) return p;
+  const box = area || img.closest(".extra-photo-area");
+  if (box && p.nw && p.nh) clampExtraPhotoPan(p, box);
+  img.style.width = (p.nw || 0) + "px";
+  img.style.height = (p.nh || 0) + "px";
+  img.style.transform = `translate(${p.x}px,${p.y}px) scale(${p.sc})`;
+  return p;
+}
+
+// Масштаб ровно 100% и кадр по центру квадрата
+function resetExtraPhotoFit(f, els) {
+  const p = ensureExtraPhoto(f);
+  const cover = extraPhotoCoverScale(p, els.area);
+  if (!cover) return;
+  p.sc = cover;
+  p.x = (els.area.clientWidth - p.nw * p.sc) / 2;
+  p.y = (els.area.clientHeight - p.nh * p.sc) / 2;
+  p.v = EP_PHOTO_VERSION;
+  applyExtraPhotoTransform(f, els.img, els.area);
+}
+
+function updateExtraPhotoUI(f, els) {
+  const p = ensureExtraPhoto(f);
+  const has = extraPhotoHasImage(p);
+  els.area?.classList.toggle("has-photo", has);
+  els.toolbar?.classList.toggle("is-empty", !has);
+  // Без фото масштабировать нечего — оставляем только выбор размера ячейки
+  els.toolbar?.querySelectorAll(".ep-zoom").forEach((el) => {
+    el.style.display = has ? "" : "none";
+  });
+  if (els.zoomValue)
+    els.zoomValue.textContent = extraPhotoZoomPercent(p, els.area) + "%";
+  if (els.sizeChip) {
+    const w = Math.round(extraPhotoSize(els.area));
+    els.sizeChip.textContent = `${w}×${w}`;
+  }
+}
+
+// Запись в sessionStorage на каждое движение колеса была слишком дорогой,
+// поэтому состояние кадра сохраняем с небольшой задержкой.
+function scheduleExtraPhotoSave() {
+  if (_extraPhotoSaveTimer) clearTimeout(_extraPhotoSaveTimer);
+  _extraPhotoSaveTimer = setTimeout(() => {
+    _extraPhotoSaveTimer = null;
+    saveTempState();
+  }, EP_SAVE_DELAY);
+}
+
+function flushExtraPhotoSave() {
+  if (_extraPhotoSaveTimer) {
+    clearTimeout(_extraPhotoSaveTimer);
+    _extraPhotoSaveTimer = null;
+  }
+  saveTempState();
+}
+
+// ===== Масштаб (колесо, кнопки, двойной клик) =====
+
+function zoomExtraPhoto(f, els, factor, clientX = null, clientY = null) {
+  const p = ensureExtraPhoto(f);
+  if (!extraPhotoHasImage(p) || !p.nw || !els.area) return;
+  const rect = els.area.getBoundingClientRect();
+  const ax =
+    clientX == null ? rect.width / S.scale / 2 : (clientX - rect.left) / S.scale;
+  const ay =
+    clientY == null ? rect.height / S.scale / 2 : (clientY - rect.top) / S.scale;
+  const next = clampExtraPhotoScale(p, els.area, p.sc * factor);
+  if (!next || next === p.sc) return; // предел достигнут — не дёргаем кадр
+  const px = (ax - p.x) / p.sc;
+  const py = (ay - p.y) / p.sc;
+  p.sc = next;
+  p.x = ax - px * next;
+  p.y = ay - py * next;
+  applyExtraPhotoTransform(f, els.img, els.area);
+  updateExtraPhotoUI(f, els);
+  scheduleExtraPhotoSave();
+}
+
+// ===== Перемещение кадра =====
+
+function startExtraPhotoDrag(f, els, clientX, clientY) {
+  const p = ensureExtraPhoto(f);
+  if (!extraPhotoHasImage(p)) return;
+  _extraPhotoDrag = { f, els, sx: clientX, sy: clientY, stx: p.x, sty: p.y };
+  els.img?.classList.add("grabbing");
+}
+
+function moveExtraPhotoDrag(clientX, clientY) {
+  const d = _extraPhotoDrag;
+  if (!d) return;
+  const p = ensureExtraPhoto(d.f);
+  p.x = d.stx + (clientX - d.sx) / S.scale;
+  p.y = d.sty + (clientY - d.sy) / S.scale;
+  applyExtraPhotoTransform(d.f, d.els.img, d.els.area);
+}
+
+function endExtraPhotoDrag() {
+  if (!_extraPhotoDrag) return false;
+  _extraPhotoDrag.els.img?.classList.remove("grabbing");
+  _extraPhotoDrag = null;
+  return true;
+}
+
+// ===== Размер ячейки =====
+
+function setExtraPhotoSize(f, els, size) {
+  const p = ensureExtraPhoto(f);
+  p.size = Math.round(clamp(size, EP_MIN_SIZE, EP_MAX_SIZE));
+  els.content?.style.setProperty("--ep-size", p.size + "px");
+  // Пересчёт масштаба делает ResizeObserver: кадр остаётся «вписанным» так же
+  return p.size;
+}
+
+function cycleExtraPhotoSize(f, els) {
+  const p = ensureExtraPhoto(f);
+  const cur = p.size || Math.round(extraPhotoSize(els.area));
+  const next = EP_SIZES.find((s) => s > cur) ?? EP_SIZES[0];
+  setExtraPhotoSize(f, els, next);
+  flushExtraPhotoSave();
+  showToast(`Размер ячейки: ${next}×${next} px`);
+}
+
+function startExtraPhotoResize(f, els, clientX, clientY) {
+  _extraPhotoResize = {
+    f,
+    els,
+    sx: clientX,
+    sy: clientY,
+    size: extraPhotoSize(els.area),
+  };
+  els.resize?.classList.add("active");
+}
+
+function moveExtraPhotoResize(clientX, clientY) {
+  const r = _extraPhotoResize;
+  if (!r) return;
+  const dx = (clientX - r.sx) / S.scale;
+  const dy = (clientY - r.sy) / S.scale;
+  setExtraPhotoSize(r.f, r.els, r.size + Math.max(dx, dy));
+}
+
+function endExtraPhotoResize() {
+  if (!_extraPhotoResize) return false;
+  _extraPhotoResize.els.resize?.classList.remove("active");
+  _extraPhotoResize = null;
+  return true;
+}
+
+// Если браузер сам изменил размер ячейки (dual-режим, узкая колонка,
+// изменение размера окна), кадр пересчитываем пропорционально,
+// чтобы он не «поплыл» и не показывал пустые поля.
+function observeExtraPhotoSize(f, els) {
+  if (typeof ResizeObserver === "undefined" || !els.area) return;
+  let lastW = 0,
+    lastH = 0;
+  const ro = new ResizeObserver(() => {
+    if (!els.area.isConnected) {
+      ro.disconnect();
+      return;
+    }
+    const w = els.area.clientWidth,
+      h = els.area.clientHeight;
+    if (!w || !h) return;
+    if (!lastW) {
+      lastW = w;
+      lastH = h;
+      return;
+    }
+    if (w === lastW && h === lastH) return;
+    const k = w / lastW;
+    lastW = w;
+    lastH = h;
+    const p = ensureExtraPhoto(f);
+    if (extraPhotoHasImage(p) && p.nw && p.sc) {
+      p.sc *= k;
+      p.x *= k;
+      p.y *= k;
+      applyExtraPhotoTransform(f, els.img, els.area);
+    }
+    updateExtraPhotoUI(f, els);
+  });
+  ro.observe(els.area);
+  els.area.__epRO = ro;
+}
+
+// ===== Разметка и привязка событий =====
+
 function renderCustomPhotoField(f, container, isR = false, place = "end") {
   const p = ensureExtraPhoto(f);
   const w = document.createElement("div");
@@ -1549,25 +1819,39 @@ function renderCustomPhotoField(f, container, isR = false, place = "end") {
   w.dataset.fieldId = f.id;
   const ic = FIELD_ICONS[f.icon] || FIELD_ICONS.photo;
   const side = isR || f.id.startsWith("r-") ? ' data-side="right"' : "";
-  const has = !!(p.src && p.src !== "loading");
-  w.innerHTML = `<div class="field-delete-btn ui-only" data-target="${f.id}"${side} title="Удалить">✕</div>
+  const has = extraPhotoHasImage(p);
+  const size = Math.round(
+    clamp(p.size || EP_DEFAULT_SIZE, EP_MIN_SIZE, EP_MAX_SIZE),
+  );
+  w.innerHTML = `<div class="field-delete-btn ui-only" data-target="${f.id}"${side} title="Удалить поле">✕</div>
     <div class="field-icon-wrap">${ic}</div>
-    <div class="field-content extra-photo-content">
+    <div class="field-content extra-photo-content" style="--ep-size:${size}px">
       <input type="text" class="field-label extra-photo-caption" maxlength="40" placeholder="Подпись (например, Лицо)" autocomplete="off" />
-      <div class="extra-photo-area">
-        <div class="extra-photo-placeholder"${has ? ' style="display:none"' : ""}>
-          <span>Нажмите, чтобы загрузить фото</span>
+      <div class="extra-photo-area${has ? " has-photo" : ""}">
+        <div class="extra-photo-placeholder ui-only"${has ? ' style="display:none"' : ""}>
+          ${EP_PLACEHOLDER_ICON}
+          <span data-ep-status>Нажмите, чтобы загрузить фото</span>
+          <span class="ep-ph-sub">Квадратная ячейка · JPG, PNG, WEBP</span>
         </div>
         <div class="extra-photo-wrapper${has ? " active" : ""}">
           <img class="extra-photo-img" alt="" draggable="false" />
         </div>
-        <div class="extra-photo-hint ui-only${has ? " visible" : ""}">Колёсико — масштаб · перетащите кадр</div>
+        <div class="extra-photo-hint ui-only">Перетащите кадр · колёсико — масштаб</div>
         <div class="portrait-actions extra-photo-actions ui-only" style="display:${has ? "flex" : "none"}">
-          <button type="button" class="portrait-change-btn extra-photo-change" title="Заменить">🔄</button>
+          <button type="button" class="portrait-change-btn extra-photo-change" title="Заменить фото">🔄</button>
           <button type="button" class="portrait-delete-btn extra-photo-clear" title="Удалить фото">🗑</button>
         </div>
+        <div class="extra-photo-resize ui-only" title="Потяните, чтобы изменить размер ячейки · двойной клик — сброс"><svg viewBox="0 0 18 18" aria-hidden="true"><path d="M17 1 1 17M17 7 7 17M17 13l-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+      </div>
+      <div class="extra-photo-toolbar ui-only${has ? "" : " is-empty"}">
+        <button type="button" class="ep-btn ep-zoom ep-zoom-out" title="Уменьшить масштаб">−</button>
+        <span class="extra-photo-zoom-value ep-zoom" title="Масштаб кадра относительно вписанного">100%</span>
+        <button type="button" class="ep-btn ep-zoom ep-zoom-in" title="Увеличить масштаб">+</button>
+        <button type="button" class="ep-btn ep-zoom ep-zoom-fit" title="Вписать кадр в квадрат">Вписать</button>
+        <button type="button" class="ep-btn extra-photo-size" title="Размер ячейки: нажмите, чтобы изменить, или потяните за угол">${size}×${size}</button>
       </div>
     </div>`;
+  const els = extraPhotoEls(w);
   const cap = w.querySelector(".extra-photo-caption");
   cap.value = f.label || "";
   cap.addEventListener("input", () => {
@@ -1577,46 +1861,48 @@ function renderCustomPhotoField(f, container, isR = false, place = "end") {
     f.label = cap.value;
     saveTempState();
   });
-  bindExtraPhotoField(f, w);
+  bindExtraPhotoField(f, els);
   if (place === "start" && container.firstChild)
     container.insertBefore(w, container.firstChild);
   else container.appendChild(w);
+  updateExtraPhotoUI(f, els);
   if (has) {
-    const img = w.querySelector(".extra-photo-img");
+    const img = els.img;
     img.src = p.src;
     img.onload = () => {
-      if (!p.nw) {
+      if (!p.nw || !p.nh) {
         p.nw = img.naturalWidth;
         p.nh = img.naturalHeight;
-        const areaW = w.querySelector(".extra-photo-area")?.clientWidth || 320;
-        if (!p.sc || p.sc === 1) p.sc = areaW / Math.max(p.nw, 1);
       }
-      applyExtraPhotoTransform(f, img);
+      // Черновики старого формата вписывались по ширине — пересобираем кадр
+      if (!p.sc || p.sc === 1 || p.v !== EP_PHOTO_VERSION)
+        resetExtraPhotoFit(f, els);
+      else applyExtraPhotoTransform(f, img, els.area);
+      updateExtraPhotoUI(f, els);
     };
   }
+  observeExtraPhotoSize(f, els);
 }
 
-function extraPhotoEls(root) {
-  return {
-    area: root.querySelector(".extra-photo-area"),
-    wrap: root.querySelector(".extra-photo-wrapper"),
-    img: root.querySelector(".extra-photo-img"),
-    ph: root.querySelector(".extra-photo-placeholder"),
-    hint: root.querySelector(".extra-photo-hint"),
-    actions: root.querySelector(".extra-photo-actions"),
-  };
-}
-
-function applyExtraPhotoTransform(f, img) {
+// Полный сброс ячейки: пусто, без «битого» src и висячих обработчиков
+function clearExtraPhotoField(f, els) {
   const p = ensureExtraPhoto(f);
-  if (!img) return;
-  img.style.width = (p.nw || 0) + "px";
-  img.style.height = (p.nh || 0) + "px";
-  img.style.transform = `translate(${p.x}px,${p.y}px) scale(${p.sc})`;
+  const size = p.size; // выбранный размер ячейки сохраняем
+  Object.assign(p, emptyExtraPhoto());
+  p.size = size;
+  els.wrap?.classList.remove("active");
+  if (els.img) {
+    els.img.onload = null;
+    els.img.removeAttribute("src");
+    els.img.removeAttribute("style");
+  }
+  if (els.ph) els.ph.style.display = "";
+  els.area?.classList.remove("loading");
+  if (els.actions) els.actions.style.display = "none";
+  updateExtraPhotoUI(f, els);
 }
 
-function bindExtraPhotoField(f, root) {
-  const els = extraPhotoEls(root);
+function bindExtraPhotoField(f, els) {
   const openPicker = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -1624,70 +1910,154 @@ function bindExtraPhotoField(f, root) {
     $("extra-photo-input")?.click();
   };
   els.area.addEventListener("click", (e) => {
-    if (e.target.closest(".extra-photo-actions")) return;
-    const p = ensureExtraPhoto(f);
-    if (p.src && p.src !== "loading") return;
+    if (
+      e.target.closest(
+        ".extra-photo-actions, .extra-photo-toolbar, .extra-photo-resize",
+      )
+    )
+      return;
+    if (extraPhotoHasImage(ensureExtraPhoto(f))) return;
     openPicker(e);
   });
-  els.area.querySelector(".extra-photo-change")?.addEventListener("click", openPicker);
-  els.area.querySelector(".extra-photo-clear")?.addEventListener("click", async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const p = ensureExtraPhoto(f);
-    if (!p.src || p.src === "loading") return;
-    if (!confirm("Удалить фото?")) return;
-    const oldSrc = p.src;
-    try {
-      if (oldSrc && !isDataUrl(oldSrc)) await deleteImageFromCloudinary(oldSrc);
-      Object.assign(p, emptyExtraPhoto());
-      els.wrap.classList.remove("active");
-      els.img.src = "";
-      els.ph.style.display = "";
-      els.hint.classList.remove("visible");
-      els.actions.style.display = "none";
-      saveTempState();
-      showToast("Фото удалено");
-    } catch {
-      showToast("Ошибка удаления", true);
-    }
-  });
-  els.img.addEventListener("mousedown", (e) => {
-    const p = ensureExtraPhoto(f);
-    if (!p.src || p.src === "loading") return;
-    e.stopPropagation();
-    e.preventDefault();
-    _extraPhotoDrag = {
-      f,
-      img: els.img,
-      sx: e.clientX,
-      sy: e.clientY,
-      stx: p.x,
-      sty: p.y,
-    };
-    els.img.classList.add("grabbing");
-  });
-  els.area.addEventListener(
-    "wheel",
-    (e) => {
-      const p = ensureExtraPhoto(f);
-      if (!p.src || p.src === "loading") return;
+  els.area
+    .querySelector(".extra-photo-change")
+    ?.addEventListener("click", openPicker);
+  els.area
+    .querySelector(".extra-photo-clear")
+    ?.addEventListener("click", async (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const factor = e.deltaY < 0 ? 1.08 : 0.93;
-      const ns = clamp(p.sc * factor, 0.02, 30);
-      const rect = els.area.getBoundingClientRect();
-      const mx = (e.clientX - rect.left) / S.scale;
-      const my = (e.clientY - rect.top) / S.scale;
-      const px = (mx - p.x) / p.sc;
-      const py = (my - p.y) / p.sc;
-      p.sc = ns;
-      p.x = mx - px * ns;
-      p.y = my - py * ns;
-      applyExtraPhotoTransform(f, els.img);
-      saveTempState();
+      const p = ensureExtraPhoto(f);
+      if (!extraPhotoHasImage(p)) return;
+      if (!confirm("Удалить фото?")) return;
+      const oldSrc = p.src;
+      try {
+        if (oldSrc && !isDataUrl(oldSrc))
+          await deleteImageFromCloudinary(oldSrc);
+        clearExtraPhotoField(f, els);
+        flushExtraPhotoSave();
+        showToast("Фото удалено");
+      } catch {
+        showToast("Ошибка удаления", true);
+      }
+    });
+
+  // Перемещение кадра — мышь и тач
+  els.img?.addEventListener("mousedown", (e) => {
+    if (!extraPhotoHasImage(ensureExtraPhoto(f))) return;
+    e.stopPropagation();
+    e.preventDefault();
+    startExtraPhotoDrag(f, els, e.clientX, e.clientY);
+  });
+  els.img?.addEventListener(
+    "touchstart",
+    (e) => {
+      const t = e.touches?.[0];
+      if (!t || !extraPhotoHasImage(ensureExtraPhoto(f))) return;
+      e.stopPropagation();
+      e.preventDefault();
+      startExtraPhotoDrag(f, els, t.clientX, t.clientY);
     },
     { passive: false },
   );
+  // Двойной клик — вернуть кадр в исходное положение
+  els.img?.addEventListener("dblclick", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!extraPhotoHasImage(ensureExtraPhoto(f))) return;
+    resetExtraPhotoFit(f, els);
+    updateExtraPhotoUI(f, els);
+    flushExtraPhotoSave();
+  });
+
+  els.area.addEventListener(
+    "wheel",
+    (e) => {
+      if (!extraPhotoHasImage(ensureExtraPhoto(f))) return;
+      e.preventDefault();
+      e.stopPropagation();
+      zoomExtraPhoto(
+        f,
+        els,
+        e.deltaY < 0 ? EP_ZOOM_STEP : 1 / EP_ZOOM_STEP,
+        e.clientX,
+        e.clientY,
+      );
+    },
+    { passive: false },
+  );
+
+  // Кнопки масштаба
+  const tb = els.toolbar;
+  if (tb) {
+    const stop = (fn) => (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      fn();
+    };
+    tb.querySelector(".ep-zoom-in")?.addEventListener(
+      "click",
+      stop(() => zoomExtraPhoto(f, els, EP_ZOOM_STEP)),
+    );
+    tb.querySelector(".ep-zoom-out")?.addEventListener(
+      "click",
+      stop(() => zoomExtraPhoto(f, els, 1 / EP_ZOOM_STEP)),
+    );
+    tb.querySelector(".ep-zoom-fit")?.addEventListener(
+      "click",
+      stop(() => {
+        if (!extraPhotoHasImage(ensureExtraPhoto(f))) return;
+        resetExtraPhotoFit(f, els);
+        updateExtraPhotoUI(f, els);
+        flushExtraPhotoSave();
+      }),
+    );
+    tb.querySelector(".extra-photo-size")?.addEventListener(
+      "click",
+      stop(() => cycleExtraPhotoSize(f, els)),
+    );
+  }
+
+  // Ручка изменения размера ячейки
+  const handle = els.resize;
+  if (handle) {
+    const onDown = (e) => {
+      const pt = e.touches?.[0] || e;
+      e.preventDefault();
+      e.stopPropagation();
+      startExtraPhotoResize(f, els, pt.clientX, pt.clientY);
+    };
+    handle.addEventListener("mousedown", onDown);
+    handle.addEventListener("touchstart", onDown, { passive: false });
+    handle.addEventListener("dblclick", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setExtraPhotoSize(f, els, EP_DEFAULT_SIZE);
+      flushExtraPhotoSave();
+    });
+  }
+}
+
+function onExtraPhotoPointerMove(e) {
+  const t = e.touches?.[0];
+  const x = t ? t.clientX : e.clientX;
+  const y = t ? t.clientY : e.clientY;
+  if (x == null || y == null) return;
+  if (_extraPhotoDrag) {
+    e.preventDefault();
+    moveExtraPhotoDrag(x, y);
+    return;
+  }
+  if (_extraPhotoResize) {
+    e.preventDefault();
+    moveExtraPhotoResize(x, y);
+  }
+}
+
+function onExtraPhotoPointerUp() {
+  const moved = endExtraPhotoDrag();
+  const resized = endExtraPhotoResize();
+  if (moved || resized) flushExtraPhotoSave();
 }
 
 function initExtraPhotos() {
@@ -1711,71 +2081,87 @@ function initExtraPhotos() {
     }
     loadExtraPhotoFile(f, file);
   });
-  window.addEventListener("mousemove", (e) => {
-    if (!_extraPhotoDrag) return;
-    const { f, img, sx, sy, stx, sty } = _extraPhotoDrag;
-    const p = ensureExtraPhoto(f);
-    p.x = stx + (e.clientX - sx) / S.scale;
-    p.y = sty + (e.clientY - sy) / S.scale;
-    applyExtraPhotoTransform(f, img);
+  window.addEventListener("mousemove", onExtraPhotoPointerMove);
+  window.addEventListener("mouseup", onExtraPhotoPointerUp);
+  window.addEventListener("touchmove", onExtraPhotoPointerMove, {
+    passive: false,
   });
-  window.addEventListener("mouseup", () => {
-    if (!_extraPhotoDrag) return;
-    _extraPhotoDrag.img?.classList.remove("grabbing");
-    _extraPhotoDrag = null;
-    saveTempState();
-  });
+  window.addEventListener("touchend", onExtraPhotoPointerUp);
+  window.addEventListener("touchcancel", onExtraPhotoPointerUp);
+  window.addEventListener("blur", onExtraPhotoPointerUp);
 }
 
 function loadExtraPhotoFile(f, file) {
   const p = ensureExtraPhoto(f);
-  const prevSrc = p.src;
+  const prevSrc = extraPhotoHasImage(p) ? p.src : "";
   const root = document.querySelector(`[data-field-id="${f.id}"]`);
   if (!root) return;
   const els = extraPhotoEls(root);
+  const setStatus = (text) => {
+    if (els.status) els.status.textContent = text;
+  };
   p.src = "loading";
-  const sp = els.ph.querySelector("span");
-  if (sp) sp.textContent = "Загрузка...";
-  els.ph.style.display = "";
+  setStatus("Загрузка...");
+  if (els.ph) els.ph.style.display = "";
+  els.area?.classList.add("loading");
+
+  // Если новое фото не загрузилось — возвращаем прежнее, а не пустую ячейку
+  const fail = (msg) => {
+    els.area?.classList.remove("loading");
+    if (prevSrc) {
+      p.src = prevSrc;
+      if (els.img) {
+        els.img.src = prevSrc;
+        els.img.onload = () => {
+          applyExtraPhotoTransform(f, els.img, els.area);
+          updateExtraPhotoUI(f, els);
+        };
+      }
+      if (els.ph) els.ph.style.display = "none";
+    } else {
+      clearExtraPhotoField(f, els);
+    }
+    setStatus("Нажмите, чтобы загрузить фото");
+    showToast(msg, true);
+  };
+
   const url = URL.createObjectURL(file);
   const tmp = new Image();
   tmp.onload = () => {
     convertToDataUrl(url, tmp.naturalWidth, tmp.naturalHeight, async (dataUrl) => {
       URL.revokeObjectURL(url);
       if (!dataUrl) {
-        Object.assign(p, emptyExtraPhoto());
-        if (sp) sp.textContent = "Нажмите, чтобы загрузить фото";
-        showToast("Ошибка загрузки", true);
+        fail("Ошибка загрузки изображения");
         return;
       }
       try {
-        if (prevSrc && !isDataUrl(prevSrc) && prevSrc !== "loading")
+        if (prevSrc && !isDataUrl(prevSrc))
           await deleteImageFromCloudinary(prevSrc);
       } catch {}
-      const areaW = els.area.clientWidth || 320;
       p.src = dataUrl;
       p.nw = tmp.naturalWidth;
       p.nh = tmp.naturalHeight;
-      p.sc = areaW / Math.max(tmp.naturalWidth, 1);
-      p.x = 0;
-      p.y = 0;
+      p.v = EP_PHOTO_VERSION;
+      if (!els.img) {
+        els.area?.classList.remove("loading");
+        return;
+      }
       els.img.src = dataUrl;
       els.img.onload = () => {
-        els.wrap.classList.add("active");
-        els.ph.style.display = "none";
-        if (sp) sp.textContent = "Нажмите, чтобы загрузить фото";
-        els.hint.classList.add("visible");
-        els.actions.style.display = "flex";
-        applyExtraPhotoTransform(f, els.img);
-        saveTempState();
+        els.area?.classList.remove("loading");
+        resetExtraPhotoFit(f, els);
+        els.wrap?.classList.add("active");
+        if (els.ph) els.ph.style.display = "none";
+        setStatus("Нажмите, чтобы загрузить фото");
+        if (els.actions) els.actions.style.display = "flex";
+        updateExtraPhotoUI(f, els);
+        flushExtraPhotoSave();
       };
     });
   };
   tmp.onerror = () => {
     URL.revokeObjectURL(url);
-    Object.assign(p, emptyExtraPhoto());
-    if (sp) sp.textContent = "Нажмите, чтобы загрузить фото";
-    showToast("Ошибка чтения файла", true);
+    fail("Ошибка чтения файла");
   };
   tmp.src = url;
 }
