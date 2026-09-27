@@ -75,7 +75,7 @@ function EditorPageInner() {
   return (
     <>
       {booting && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 10000 }}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 10001 }}>
           <EditorLoading />
           {loadError && (
             <div role="alert" style={{ position: "absolute", top: "60%", width: "100%", textAlign: "center", color: "#f5e6c8" }}>
@@ -100,6 +100,13 @@ function EditorPageInner() {
           >
             ← Галерея
           </a>
+          <button
+            className="ctrl-btn photo-add-btn"
+            id="add-photo-btn"
+            title="Добавить поле с фото и подписью"
+          >
+            ＋ Фото
+          </button>
           <div className="sep" />
           <button className="ctrl-btn" id="zoom-out-btn" title="Уменьшить">
             −
@@ -155,9 +162,6 @@ function EditorPageInner() {
           </button>
           <button className="ctrl-btn" id="add-field-btn">
             ＋ Поле
-          </button>
-          <button className="ctrl-btn" id="add-photo-btn" title="Добавить фото с подписью">
-            ＋ Фото
           </button>
           <button className="ctrl-btn" id="add-divider-btn">
             — Разделитель
@@ -265,7 +269,7 @@ function EditorPageInner() {
           <div className="modal-row">
             <label>Иконка:</label>
             <select id="new-field-icon">
-              <option value="scroll">Свиток</option>
+              <option value="scroll">Анкета</option>
               <option value="sword">Меч</option>
               <option value="shield">Щит</option>
               <option value="flame">Пламя</option>
@@ -472,10 +476,10 @@ function EditorPageInner() {
           <div id="sheet-parchment" />
           <div className="sheet-border" />
 
-          {/* ── Шапка со свитками ── */}
+          {/* ── Шапка анкеты ── */}
           <div className="header-scroll" id="header-scroll">
             <div className="scroll-wrap" id="scroll-wrap">
-              {/* Левый / единственный свиток */}
+              {/* Левая / единственная анкета */}
               <div className="scroll-item" id="scroll-left">
                 {/* SVG одиночного режима */}
                 <svg
@@ -552,7 +556,7 @@ function EditorPageInner() {
                   />
                 </svg>
 
-                {/* SVG левого свитка в dual mode */}
+                {/* SVG левой анкеты в двойном режиме */}
                 <svg
                   className="scroll-svg scroll-svg-half"
                   id="scroll-svg-dual-left"
@@ -696,7 +700,7 @@ function EditorPageInner() {
                 </svg>
               </div>
 
-              {/* Правый свиток (dual mode) */}
+              {/* Правая анкета (двойной режим) */}
               <div
                 className="scroll-item"
                 id="scroll-right"

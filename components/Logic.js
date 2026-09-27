@@ -1409,13 +1409,8 @@ function initAddField() {
     modal.style.display = "flex";
     $("new-field-label").focus();
   });
-  $("add-photo-btn").addEventListener("click", () => {
-    $("new-field-type").value = "photo";
-    $("new-field-icon").value = "photo";
-    $("new-field-label").value = "Фото";
-    modal.style.display = "flex";
-    $("new-field-label").focus();
-    $("new-field-label").select();
+  $("add-photo-btn")?.addEventListener("click", () => {
+    addPhotoField("Фото");
   });
   $("modal-cancel").addEventListener("click", () => {
     modal.style.display = "none";
@@ -1456,6 +1451,32 @@ function makeCustomField(id, label, type, icon) {
   return f;
 }
 
+function addPhotoField(label = "Фото") {
+  const photos = S.customFields.filter((f) => f.type === "photo").length;
+  let caption = (label || "Фото").trim() || "Фото";
+  if (photos && caption === "Фото") caption = `Фото ${photos + 1}`;
+  S.customCounter++;
+  const id = `custom_${S.customCounter}`;
+  const fL = makeCustomField(id, caption, "photo", "photo");
+  S.customFields.push(fL);
+  renderCustomField(fL, null, false, "start");
+  if (S.dualMode) {
+    const idR = `r-custom_${S.customCounter}`;
+    const fR = makeCustomField(idR, caption, "photo", "photo");
+    S.customFields2.push(fR);
+    const rl = $("fields-list-right");
+    if (rl) renderCustomField(fR, rl, true, "start");
+  }
+  updateFieldOrder();
+  saveTempState();
+  showToast("Фото добавлено — нажмите на ячейку, чтобы загрузить");
+  const cap = document.querySelector(
+    `[data-field-id="${id}"] .extra-photo-caption`,
+  );
+  cap?.focus();
+  cap?.select();
+}
+
 function emptyExtraPhoto() {
   return { src: "", x: 0, y: 0, sc: 1, nw: 0, nh: 0 };
 }
@@ -1492,11 +1513,11 @@ function ensureExtraPhoto(f) {
   return f.photo;
 }
 
-function renderCustomField(f, container = null, isR = false) {
+function renderCustomField(f, container = null, isR = false, place = "end") {
   const c = container || fieldsList;
   if (!c || c.querySelector(`[data-field-id="${f.id}"]`)) return;
   if (f.type === "photo") {
-    renderCustomPhotoField(f, c, isR);
+    renderCustomPhotoField(f, c, isR, place);
     return;
   }
   const w = document.createElement("div");
@@ -1521,7 +1542,7 @@ function renderCustomField(f, container = null, isR = false) {
   c.appendChild(w);
 }
 
-function renderCustomPhotoField(f, container, isR = false) {
+function renderCustomPhotoField(f, container, isR = false, place = "end") {
   const p = ensureExtraPhoto(f);
   const w = document.createElement("div");
   w.className = "custom-field-row extra-photo-row";
@@ -1557,7 +1578,9 @@ function renderCustomPhotoField(f, container, isR = false) {
     saveTempState();
   });
   bindExtraPhotoField(f, w);
-  container.appendChild(w);
+  if (place === "start" && container.firstChild)
+    container.insertBefore(w, container.firstChild);
+  else container.appendChild(w);
   if (has) {
     const img = w.querySelector(".extra-photo-img");
     img.src = p.src;
@@ -2096,6 +2119,20 @@ function getExportTheme() {
   return b;
 }
 
+function bakeExtraPhotosForExport() {
+  const prev = [];
+  sheet.querySelectorAll(".extra-photo-img").forEach((img) => {
+    const id = img.closest("[data-field-id]")?.dataset.fieldId;
+    const f = [...S.customFields, ...S.customFields2].find((field) => field.id === id);
+    const p = f?.photo;
+    prev.push([img, img.style.cssText]);
+    if (p?.src && p.src !== "loading" && p.nw) {
+      img.style.cssText = `transform:none;position:absolute;left:${p.x}px;top:${p.y}px;width:${p.nw * p.sc}px;height:${p.nh * p.sc}px;`;
+    }
+  });
+  return prev;
+}
+
 async function exportToPNG(ret = false) {
   const { default: html2canvas } = await import("html2canvas");
   const W = S.sheetW,
@@ -2125,7 +2162,18 @@ async function exportToPNG(ret = false) {
   const bP = bI?.style.cssText || "";
   if (bI)
     bI.style.cssText = `transform:none;position:absolute;left:${S.bg.x}px;top:${S.bg.y}px;width:${S.bg.nw * S.bg.sc}px;height:${S.bg.nh * S.bg.sc}px;`;
+  const extraPhotoPrev = bakeExtraPhotosForExport();
   const reps = [];
+  sheet.querySelectorAll(".extra-photo-caption").forEach((inp) => {
+    const v = inp.value || "";
+    const d = makeDiv(
+      v || inp.placeholder || "",
+      `font-family:'Uncial Antiqua','Cormorant Garamond',serif;font-size:${S.labelFontSize}px;color:#8b6914;letter-spacing:4px;text-transform:uppercase;display:block;width:100%;line-height:1.2;background:transparent;border:none;padding:0 0 8px;`,
+    );
+    inp.before(d);
+    inp.style.display = "none";
+    reps.push([inp, d]);
+  });
   // Имена
   [
     ["#header-name-input", S.nameFontSize],
@@ -2144,7 +2192,7 @@ async function exportToPNG(ret = false) {
   });
   sheet
     .querySelectorAll(
-      'input[type="text"]:not(.header-name-input):not(.ery-number-input),input:not([type]):not(.header-name-input)',
+      'input[type="text"]:not(.header-name-input):not(.ery-number-input):not(.extra-photo-caption),input:not([type]):not(.header-name-input):not(.extra-photo-caption)',
     )
     .forEach((inp) => {
       if (
@@ -2213,6 +2261,9 @@ async function exportToPNG(ret = false) {
     restoreFrameCorners();
     if (pI) pI.style.cssText = pP;
     if (bI) bI.style.cssText = bP;
+    extraPhotoPrev.forEach(([img, css]) => {
+      img.style.cssText = css;
+    });
     reps.forEach(([o, r]) => {
       o.style.display = "";
       r.remove();
