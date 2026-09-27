@@ -1142,14 +1142,12 @@ function EditorPageInner() {
                         <span className="rank-name" id="rank-name">
                           —
                         </span>
-                        <span className="rank-dot">·</span>
-                        <span className="rank-range" id="rank-range" />
                       </span>
                     </div>
                     <button
                       className="ery-hint-toggle ui-only"
                       id="ery-hint-toggle"
-                      title="Скрыть/показать пояснение"
+                      title="Скрыть/показать название уровня"
                     >
                       👁
                     </button>

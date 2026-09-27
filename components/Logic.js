@@ -1227,7 +1227,6 @@ function initErythrogenUnit(sfx = "") {
   const badge = $("rank-badge" + sfx),
     ltr = $("rank-letter" + sfx),
     name = $("rank-name" + sfx),
-    range = $("rank-range" + sfx),
     info = $("rank-info-inline" + sfx),
     tog = $("ery-hint-toggle" + sfx);
 
@@ -1243,9 +1242,8 @@ function initErythrogenUnit(sfx = "") {
             .find((x) => v >= x.min) || RANKS[0];
     if (ltr) ltr.textContent = r ? r.letter : "—";
     if (name) name.textContent = r ? r.name : "—";
-    if (range) range.textContent = r ? r.range + " ед." : "";
     if (badge) badge.className = "rank-badge" + (r ? ` ${r.cls}` : "");
-    // Пусто — пояснение показывается приглушённым прочерком, без точек
+    // Пусто — название показывается приглушённым прочерком
     if (info) info.classList.toggle("is-blank", !r);
   }
 
@@ -2376,7 +2374,7 @@ function createDualFields(c) {
   const eb = document.createElement("div");
   eb.className = "erythrogen-block";
   eb.dataset.fieldId = "r-erythrogen";
-  eb.innerHTML = `<div class="field-delete-btn ui-only" data-target="r-erythrogen" data-side="right" title="Удалить">✕</div><div class="erythrogen-header"><div class="field-icon-wrap" data-icon="erythrogen"></div><span class="erythrogen-title">Уровень Эритрогенов</span></div><div class="erythrogen-row"><div class="ery-level"><div class="rank-badge" id="rank-badge-right"><span class="rank-letter" id="rank-letter-right">—</span></div><input type="text" id="erythrogen-value-right" class="ery-number-input" placeholder="0" autocomplete="off"/><span class="rank-info-inline is-blank" id="rank-info-inline-right"><span class="rank-dot">·</span><span class="rank-name" id="rank-name-right">—</span><span class="rank-dot">·</span><span class="rank-range" id="rank-range-right"></span></span></div><button class="ery-hint-toggle ui-only" id="ery-hint-toggle-right" title="Скрыть/показать">👁</button></div>`;
+  eb.innerHTML = `<div class="field-delete-btn ui-only" data-target="r-erythrogen" data-side="right" title="Удалить">✕</div><div class="erythrogen-header"><div class="field-icon-wrap" data-icon="erythrogen"></div><span class="erythrogen-title">Уровень Эритрогенов</span></div><div class="erythrogen-row"><div class="ery-level"><div class="rank-badge" id="rank-badge-right"><span class="rank-letter" id="rank-letter-right">—</span></div><input type="text" id="erythrogen-value-right" class="ery-number-input" placeholder="0" autocomplete="off"/><span class="rank-info-inline is-blank" id="rank-info-inline-right"><span class="rank-dot">·</span><span class="rank-name" id="rank-name-right">—</span></span></div><button class="ery-hint-toggle ui-only" id="ery-hint-toggle-right" title="Скрыть/показать название уровня">👁</button></div>`;
   c.appendChild(eb);
   // История
   const hb = document.createElement("div");
