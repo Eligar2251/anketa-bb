@@ -63,7 +63,6 @@ const HIDEABLE = {
   nature: "Кем является",
   occupation: "Чем занимается",
   erythrogen: "Уровень Эритрогенов",
-  "divider-ery": "Разделитель (эритрогены)",
   history: "История",
 };
 
@@ -184,8 +183,6 @@ const S = {
   nameFontSize: 80,
   eryFontSize: 64,
   eryTitleFontSize: 28,
-  rankNameFontSize: 32,
-  rankRangeFontSize: 26,
   eryHintVisible: true,
   currentCharacterId: null,
   autoSaveTimer: null,
@@ -417,8 +414,6 @@ function collectState() {
     nameFontSize: S.nameFontSize,
     eryFontSize: S.eryFontSize,
     eryTitleFontSize: S.eryTitleFontSize,
-    rankNameFontSize: S.rankNameFontSize,
-    rankRangeFontSize: S.rankRangeFontSize,
     eryHintVisible: S.eryHintVisible,
     dualMode: S.dualMode,
     currentCharacterId: S.currentCharacterId,
@@ -555,13 +550,9 @@ function initFontSizeControls() {
   setupSlider("label-font-size", "label-font-val", "labelFontSize");
   setupSlider("input-font-size", "input-font-val", "inputFontSize");
   setupSlider("ery-title-font-size", "ery-title-font-val", "eryTitleFontSize");
+  // Одна настройка на всю строку уровня: буква, число и пояснение ранга
+  // масштабируются от --ery-font-size (см. globals.css)
   setupSlider("ery-font-size", "ery-font-val", "eryFontSize");
-  setupSlider("rank-name-font-size", "rank-name-font-val", "rankNameFontSize");
-  setupSlider(
-    "rank-range-font-size",
-    "rank-range-font-val",
-    "rankRangeFontSize",
-  );
   setupSlider(
     "badge-font-size",
     "badge-font-val",
@@ -591,8 +582,8 @@ function applyFontSizes() {
   r.style.setProperty("--input-font-size", S.inputFontSize + "px");
   r.style.setProperty("--ery-font-size", S.eryFontSize + "px");
   r.style.setProperty("--ery-title-font-size", S.eryTitleFontSize + "px");
-  r.style.setProperty("--rank-name-font-size", S.rankNameFontSize + "px");
-  r.style.setProperty("--rank-range-font-size", S.rankRangeFontSize + "px");
+  // --rank-name-font-size и --rank-range-font-size выводятся из
+  // --ery-font-size прямо в CSS: строка уровня остаётся одной системой
 }
 
 // ============================================================
@@ -1220,85 +1211,64 @@ function initPortraitResizeY() {
 // ERYTHROGEN
 // ============================================================
 
-function initErythrogen() {
-  const inp = $("erythrogen-value"),
-    badge = $("rank-badge"),
-    ltr = $("rank-letter"),
-    name = $("rank-name"),
-    range = $("rank-range"),
-    info = $("rank-info-inline"),
-    tog = $("ery-hint-toggle");
+// Уровень эритрогенов — единая система: значок с буквой, число и пояснение
+// ранга живут в одной строке и обновляются одним кодом для обеих колонок.
+function setEryHintVisible(visible) {
+  S.eryHintVisible = !!visible;
+  ["rank-info-inline", "rank-info-inline-right"].forEach((id) =>
+    $(id)?.classList.toggle("hidden", !S.eryHintVisible),
+  );
+}
+
+function initErythrogenUnit(sfx = "") {
+  const inp = $("erythrogen-value" + sfx);
+  if (!inp || inp.__eryBound) return;
+  inp.__eryBound = true;
+  const badge = $("rank-badge" + sfx),
+    ltr = $("rank-letter" + sfx),
+    name = $("rank-name" + sfx),
+    range = $("rank-range" + sfx),
+    info = $("rank-info-inline" + sfx),
+    tog = $("ery-hint-toggle" + sfx);
+
   function upd() {
-    const m = inp.value.trim().match(/^\d+/);
+    const raw = (inp.value || "").trim();
+    const m = raw.match(/^\d+/);
     const v = m ? parseInt(m[0], 10) : NaN;
-    if (isNaN(v) || inp.value.trim() === "") {
-      ltr.textContent = "—";
-      name.textContent = "";
-      range.textContent = "";
-      badge.className = "rank-badge";
-      return;
-    }
     const r =
-      RANKS.slice()
-        .reverse()
-        .find((r) => v >= r.min) || RANKS[0];
-    ltr.textContent = r.letter;
-    name.textContent = r.name;
-    range.textContent = r.range + " ед.";
-    badge.className = `rank-badge ${r.cls}`;
+      raw === "" || isNaN(v)
+        ? null
+        : RANKS.slice()
+            .reverse()
+            .find((x) => v >= x.min) || RANKS[0];
+    if (ltr) ltr.textContent = r ? r.letter : "—";
+    if (name) name.textContent = r ? r.name : "—";
+    if (range) range.textContent = r ? r.range + " ед." : "";
+    if (badge) badge.className = "rank-badge" + (r ? ` ${r.cls}` : "");
+    // Пусто — пояснение показывается приглушённым прочерком, без точек
+    if (info) info.classList.toggle("is-blank", !r);
   }
+
   inp.addEventListener("input", upd);
   inp.addEventListener("change", () => saveTempState());
   upd();
-  if (tog && info) {
-    if (!S.eryHintVisible) info.classList.add("hidden");
+  setEryHintVisible(S.eryHintVisible);
+
+  if (tog) {
     tog.addEventListener("click", (e) => {
       e.stopPropagation();
-      S.eryHintVisible = !S.eryHintVisible;
-      info.classList.toggle("hidden", !S.eryHintVisible);
+      setEryHintVisible(!S.eryHintVisible);
       saveTempState();
     });
   }
 }
 
+function initErythrogen() {
+  initErythrogenUnit("");
+}
+
 function initErythrogenRight() {
-  const inp = $("erythrogen-value-right");
-  if (!inp) return;
-  const badge = $("rank-badge-right"),
-    ltr = $("rank-letter-right"),
-    name = $("rank-name-right"),
-    range = $("rank-range-right"),
-    info = $("rank-info-inline-right"),
-    tog = $("ery-hint-toggle-right");
-  function upd() {
-    const m = inp.value.trim().match(/^\d+/);
-    const v = m ? parseInt(m[0], 10) : NaN;
-    if (isNaN(v) || inp.value.trim() === "") {
-      ltr.textContent = "—";
-      name.textContent = "";
-      range.textContent = "";
-      badge.className = "rank-badge";
-      return;
-    }
-    const r =
-      RANKS.slice()
-        .reverse()
-        .find((r) => v >= r.min) || RANKS[0];
-    ltr.textContent = r.letter;
-    name.textContent = r.name;
-    range.textContent = r.range + " ед.";
-    badge.className = `rank-badge ${r.cls}`;
-  }
-  inp.addEventListener("input", upd);
-  inp.addEventListener("change", () => saveTempState());
-  upd();
-  if (tog && info) {
-    tog.addEventListener("click", (e) => {
-      e.stopPropagation();
-      info.classList.toggle("hidden");
-      saveTempState();
-    });
-  }
+  initErythrogenUnit("-right");
 }
 
 // ============================================================
@@ -1339,13 +1309,6 @@ function hideField(id, isR = false) {
     if (isR) S.hiddenFields2.add(id);
     else S.hiddenFields.add(id);
   }
-  if (id === "erythrogen" && !isR) {
-    const d = $("divider-ery");
-    if (d) {
-      d.style.display = "none";
-      S.hiddenFields.add("divider-ery");
-    }
-  }
   updateFieldOrder();
   saveTempState();
 }
@@ -1355,13 +1318,6 @@ function showField(id, isR = false) {
     el.style.display = "";
     if (isR) S.hiddenFields2.delete(id);
     else S.hiddenFields.delete(id);
-  }
-  if (id === "erythrogen" && !isR) {
-    const d = $("divider-ery");
-    if (d) {
-      d.style.display = "";
-      S.hiddenFields.delete("divider-ery");
-    }
   }
 }
 
@@ -1575,6 +1531,8 @@ function extraPhotoEls(root) {
     img: root.querySelector(".extra-photo-img"),
     ph: root.querySelector(".extra-photo-placeholder"),
     status: root.querySelector("[data-ep-status]"),
+    cap: root.querySelector(".extra-photo-caption"),
+    captionBtn: root.querySelector(".ep-caption-btn"),
     actions: root.querySelector(".extra-photo-actions"),
     toolbar: root.querySelector(".extra-photo-toolbar"),
     zoomValue: root.querySelector(".extra-photo-zoom-value"),
@@ -1812,6 +1770,15 @@ function observeExtraPhotoSize(f, els) {
 
 // ===== Разметка и привязка событий =====
 
+// Пустая подпись не должна оставлять пустую строку над ячейкой: поле
+// подписи скрывается, и фото поднимается на её место.
+function syncExtraPhotoCaption(f, els) {
+  const cap = els?.cap,
+    content = els?.content;
+  if (!cap || !content) return;
+  content.classList.toggle("no-caption", !cap.value.trim());
+}
+
 function renderCustomPhotoField(f, container, isR = false, place = "end") {
   const p = ensureExtraPhoto(f);
   const w = document.createElement("div");
@@ -1844,6 +1811,7 @@ function renderCustomPhotoField(f, container, isR = false, place = "end") {
         <div class="extra-photo-resize ui-only" title="Потяните, чтобы изменить размер ячейки · двойной клик — сброс"><svg viewBox="0 0 18 18" aria-hidden="true"><path d="M17 1 1 17M17 7 7 17M17 13l-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
       </div>
       <div class="extra-photo-toolbar ui-only${has ? "" : " is-empty"}">
+        <button type="button" class="ep-btn ep-caption-btn" title="Добавить подпись к ячейке">＋ Подпись</button>
         <button type="button" class="ep-btn ep-zoom ep-zoom-out" title="Уменьшить масштаб">−</button>
         <span class="extra-photo-zoom-value ep-zoom" title="Масштаб кадра относительно вписанного">100%</span>
         <button type="button" class="ep-btn ep-zoom ep-zoom-in" title="Увеличить масштаб">+</button>
@@ -1852,15 +1820,30 @@ function renderCustomPhotoField(f, container, isR = false, place = "end") {
       </div>
     </div>`;
   const els = extraPhotoEls(w);
-  const cap = w.querySelector(".extra-photo-caption");
+  const cap = els.cap;
   cap.value = f.label || "";
   cap.addEventListener("input", () => {
     f.label = cap.value;
+    syncExtraPhotoCaption(f, els);
+  });
+  cap.addEventListener("focus", () => cap.classList.add("is-editing"));
+  cap.addEventListener("blur", () => {
+    if (!cap.value.trim()) cap.classList.remove("is-editing");
+    f.label = cap.value;
+    syncExtraPhotoCaption(f, els);
+    saveTempState();
   });
   cap.addEventListener("change", () => {
     f.label = cap.value;
     saveTempState();
   });
+  // Подпись не обязательна: вернуть строку можно кнопкой на панели
+  els.captionBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    cap.classList.add("is-editing");
+    cap.focus();
+  });
+  syncExtraPhotoCaption(f, els);
   bindExtraPhotoField(f, els);
   if (place === "start" && container.firstChild)
     container.insertBefore(w, container.firstChild);
@@ -2389,17 +2372,11 @@ function createDualFields(c) {
     r.innerHTML = `<div class="field-delete-btn ui-only" data-target="${f.id}" data-side="right" title="Удалить">✕</div><div class="field-icon-wrap" data-icon="${f.icon}"></div><div class="field-content"><span class="field-label">${f.label}</span><input type="text" class="field-input" id="${f.iid}" placeholder="—" autocomplete="off"/></div>`;
     c.appendChild(r);
   });
-  // Разделитель
-  const dv = document.createElement("div");
-  dv.className = "section-divider";
-  dv.dataset.fieldId = "r-divider-ery";
-  dv.innerHTML = `<svg width="100%" height="34" viewBox="0 0 800 34" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><line x1="0" y1="17" x2="355" y2="17" stroke="#7a4a1a" stroke-width="1.2"/><line x1="445" y1="17" x2="800" y2="17" stroke="#7a4a1a" stroke-width="1.2"/><path d="M355,17L372,7L400,17L372,27Z" fill="#9a6425" stroke="#7a4a1a" stroke-width=".8"/><path d="M445,17L428,7L400,17L428,27Z" fill="#9a6425" stroke="#7a4a1a" stroke-width=".8"/><circle cx="400" cy="17" r="4.5" fill="#7a4a1a"/></svg>`;
-  c.appendChild(dv);
   // Эритрогены
   const eb = document.createElement("div");
   eb.className = "erythrogen-block";
   eb.dataset.fieldId = "r-erythrogen";
-  eb.innerHTML = `<div class="field-delete-btn ui-only" data-target="r-erythrogen" data-side="right" title="Удалить">✕</div><div class="erythrogen-header"><div class="field-icon-wrap" data-icon="erythrogen"></div><span class="erythrogen-title">Уровень Эритрогенов</span></div><div class="erythrogen-row"><div class="rank-badge" id="rank-badge-right"><span class="rank-letter" id="rank-letter-right">—</span></div><input type="text" id="erythrogen-value-right" class="ery-number-input" placeholder="0" autocomplete="off"/><span class="rank-info-inline" id="rank-info-inline-right"><span class="rank-dot"> · </span><span class="rank-name" id="rank-name-right">Введите значение</span><span class="rank-dot"> · </span><span class="rank-range" id="rank-range-right"></span></span><button class="ery-hint-toggle ui-only" id="ery-hint-toggle-right" title="Скрыть/показать">👁</button></div>`;
+  eb.innerHTML = `<div class="field-delete-btn ui-only" data-target="r-erythrogen" data-side="right" title="Удалить">✕</div><div class="erythrogen-header"><div class="field-icon-wrap" data-icon="erythrogen"></div><span class="erythrogen-title">Уровень Эритрогенов</span></div><div class="erythrogen-row"><div class="ery-level"><div class="rank-badge" id="rank-badge-right"><span class="rank-letter" id="rank-letter-right">—</span></div><input type="text" id="erythrogen-value-right" class="ery-number-input" placeholder="0" autocomplete="off"/><span class="rank-info-inline is-blank" id="rank-info-inline-right"><span class="rank-dot">·</span><span class="rank-name" id="rank-name-right">—</span><span class="rank-dot">·</span><span class="rank-range" id="rank-range-right"></span></span></div><button class="ery-hint-toggle ui-only" id="ery-hint-toggle-right" title="Скрыть/показать">👁</button></div>`;
   c.appendChild(eb);
   // История
   const hb = document.createElement("div");
@@ -2519,6 +2496,86 @@ function bakeExtraPhotosForExport() {
   return prev;
 }
 
+// ============================================================
+// РАМКА ПОРТРЕТА В ЭКСПОРТЕ
+// html2canvas рисовал только левый верхний уголок рамки: остальные три
+// и часть линий в PNG пропадали. Поэтому на время съёмки DOM-рамку
+// снимаем, а после — переносим её на готовый canvas одной векторной
+// картинкой, собранной из той же самой разметки и реальных размеров.
+// ============================================================
+async function preparePortraitFrameForExport() {
+  if (!portArea || !sheet) return null;
+  const els = Array.from(
+    portArea.querySelectorAll(".frame-corner, .frame-line"),
+  );
+  if (!els.length) return null;
+  const area = portArea.getBoundingClientRect();
+  const base = sheet.getBoundingClientRect();
+  if (!area.width || !area.height) return null;
+  const r2 = (v) => Math.round(v * 100) / 100;
+  const parts = [];
+  // Линии рамки: обычные div'ы, цвет берём из текущей темы
+  portArea.querySelectorAll(".frame-line").forEach((l) => {
+    const r = l.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    const fill = getComputedStyle(l).backgroundColor || "#7a4a1a";
+    parts.push(
+      `<rect x="${r2(r.left - area.left)}" y="${r2(r.top - area.top)}" width="${r2(r.width)}" height="${r2(r.height)}" fill="${fill}"/>`,
+    );
+  });
+  // Уголки: та же разметка, что на экране, сдвинутая в свою точку
+  portArea.querySelectorAll(".frame-corner").forEach((c) => {
+    const inner = (c.innerHTML || "").trim();
+    const r = c.getBoundingClientRect();
+    if (!inner || !r.width || !r.height) return;
+    const vb = (c.getAttribute("viewBox") || "").split(/[\s,]+/).map(Number);
+    const vw = vb.length === 4 && vb[2] > 0 ? vb[2] : r.width;
+    const vh = vb.length === 4 && vb[3] > 0 ? vb[3] : r.height;
+    const sx = r.width / vw,
+      sy = r.height / vh;
+    const scale = sx !== 1 || sy !== 1 ? ` scale(${r2(sx)},${r2(sy)})` : "";
+    parts.push(
+      `<g transform="translate(${r2(r.left - area.left)},${r2(r.top - area.top)})${scale}">${inner}</g>`,
+    );
+  });
+  if (parts.length < 2) return null;
+  const w = r2(area.width),
+    h = r2(area.height);
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" ` +
+    `viewBox="0 0 ${w} ${h}">${parts.join("")}</svg>`;
+  const img = new Image();
+  const ok = await new Promise((resolve) => {
+    img.onload = () => resolve(true);
+    img.onerror = () => resolve(false);
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  });
+  if (!ok || !img.width || !img.height) return null;
+  // Рамку на время съёмки прячем, чтобы она не задвоилась
+  const hidden = els.map((el) => [el, el.style.display]);
+  els.forEach((el) => (el.style.display = "none"));
+  return {
+    img,
+    x: area.left - base.left,
+    y: area.top - base.top,
+    w: area.width,
+    h: area.height,
+    hidden,
+  };
+}
+
+function drawPortraitFrameOverlay(canvas, frame, pageW) {
+  if (!frame) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const k = pageW ? canvas.width / pageW : 1;
+  ctx.drawImage(frame.img, frame.x * k, frame.y * k, frame.w * k, frame.h * k);
+}
+
+function restorePortraitFrame(frame) {
+  frame?.hidden?.forEach(([el, d]) => (el.style.display = d));
+}
+
 async function exportToPNG(ret = false) {
   const { default: html2canvas } = await import("html2canvas");
   const W = S.sheetW,
@@ -2539,7 +2596,10 @@ async function exportToPNG(ret = false) {
   const uiEls = Array.from(sheet.querySelectorAll(".ui-only"));
   const uiPrev = uiEls.map((e) => e.style.display);
   uiEls.forEach((e) => (e.style.display = "none"));
-  fixFrameCornersForExport();
+  // Рамку портрета переносим на canvas вручную; если не получилось —
+  // остаётся прежний способ с явными left/top у каждого уголка.
+  const frame = await preparePortraitFrameForExport();
+  if (!frame) fixFrameCornersForExport();
   const pI = sheet.querySelector("#portrait-img");
   const pP = pI?.style.cssText || "";
   if (pI && S.port.src && S.port.src !== "loading")
@@ -2551,13 +2611,19 @@ async function exportToPNG(ret = false) {
   const extraPhotoPrev = bakeExtraPhotosForExport();
   const reps = [];
   sheet.querySelectorAll(".extra-photo-caption").forEach((inp) => {
-    const v = inp.value || "";
+    const v = (inp.value || "").trim();
+    const w = Math.round(inp.getBoundingClientRect().width);
+    inp.style.display = "none";
+    // Пустая подпись в экспорт не попадает: ячейка встаёт на её место
+    if (!v) {
+      reps.push([inp, null]);
+      return;
+    }
     const d = makeDiv(
-      v || inp.placeholder || "",
-      `font-family:'Uncial Antiqua','Cormorant Garamond',serif;font-size:${S.labelFontSize}px;color:#8b6914;letter-spacing:4px;text-transform:uppercase;display:block;width:100%;line-height:1.2;background:transparent;border:none;padding:0 0 8px;`,
+      v,
+      `font-family:'Uncial Antiqua','Cormorant Garamond',serif;font-size:${S.labelFontSize}px;color:#8b6914;letter-spacing:4px;text-transform:uppercase;text-align:center;display:block;width:${w}px;max-width:100%;line-height:1.2;background:transparent;border:none;padding:0 0 8px;`,
     );
     inp.before(d);
-    inp.style.display = "none";
     reps.push([inp, d]);
   });
   // Имена
@@ -2598,9 +2664,12 @@ async function exportToPNG(ret = false) {
     });
   sheet.querySelectorAll(".ery-number-input").forEach((inp) => {
     const v = inp.value || "";
+    // Число уровня — часть той же строки, что и значок: берём его реальный
+    // бокс и центрируем цифру по общей горизонтальной оси
+    const r = inp.getBoundingClientRect();
     const d = makeDiv(
       v || "0",
-      `font-family:'Cormorant Garamond',serif;font-size:${S.eryFontSize}px;font-weight:700;color:${theme.numberColor};background:transparent;display:inline;border:none;padding:0;margin-left:14px;opacity:${v ? "1" : "0.3"};vertical-align:baseline`,
+      `font-family:'Cormorant Garamond',serif;font-size:${S.eryFontSize}px;font-weight:700;color:${theme.numberColor};background:transparent;border:none;padding:0;margin:0;flex:0 0 auto;width:${Math.round(r.width)}px;height:${Math.round(r.height)}px;display:flex;align-items:center;line-height:1;opacity:${v ? "1" : "0.3"};`,
     );
     inp.before(d);
     inp.style.display = "none";
@@ -2640,10 +2709,14 @@ async function exportToPNG(ret = false) {
       ignoreElements: (el) =>
         el.style?.display === "none" || el.classList?.contains("modal-overlay"),
     });
+    // Рамка портрета рисуется поверх снимка — так все четыре уголка
+    // и линии гарантированно попадают в файл
+    drawPortraitFrameOverlay(canvas, frame, W);
     dataUrl = canvas.toDataURL("image/png", 1.0);
   } finally {
     Object.assign(sheet.style, prev);
     uiEls.forEach((e, i) => (e.style.display = uiPrev[i] || ""));
+    restorePortraitFrame(frame);
     restoreFrameCorners();
     if (pI) pI.style.cssText = pP;
     if (bI) bI.style.cssText = bP;
@@ -2652,7 +2725,7 @@ async function exportToPNG(ret = false) {
     });
     reps.forEach(([o, r]) => {
       o.style.display = "";
-      r.remove();
+      r?.remove();
     });
     applyView();
   }
@@ -2676,8 +2749,12 @@ function fixFrameCornersForExport() {
   _savedCS = [];
   const portraitArea = sheet.querySelector("#portrait-area");
   if (!portraitArea) return;
-  const pw = S.portW;
-  const ph = S.portH;
+  // Берём реальный размер области: S.portW/portH могут не совпадать с
+  // вёрсткой (колонку сжимает max-width, dual-режим), и тогда уголки
+  // уезжают за overflow:hidden — в файл попадал только левый верхний.
+  const rect = portraitArea.getBoundingClientRect();
+  const pw = Math.round(rect.width) || S.portW;
+  const ph = Math.round(rect.height) || S.portH;
   // Уголки рамки — используем только left/top, т.к. html2canvas плохо обрабатывает right/bottom
   // Из-за этого ранее оставался только левый верхний уголок (TL), остальные пропадали
   portraitArea.querySelectorAll(".frame-corner").forEach((c) => {
@@ -2894,9 +2971,13 @@ function applyLoadedData(d) {
   if (typeof d.portH === "number" && d.portH >= MIN_PH) S.portH = d.portH;
   if (d.port?.src) Object.assign(S.port, d.port);
   if (d.bg?.src) Object.assign(S.bg, d.bg);
-  if (Array.isArray(d.hidden)) d.hidden.forEach((id) => S.hiddenFields.add(id));
+  // Разделителя перед эритрогенами больше нет — из старых черновиков
+  // его не поднимаем, чтобы в списке возврата не было мёртвой строки
+  const gone = new Set(["divider-ery", "r-divider-ery"]);
+  if (Array.isArray(d.hidden))
+    d.hidden.forEach((id) => !gone.has(id) && S.hiddenFields.add(id));
   if (Array.isArray(d.hidden2))
-    d.hidden2.forEach((id) => S.hiddenFields2.add(id));
+    d.hidden2.forEach((id) => !gone.has(id) && S.hiddenFields2.add(id));
   if (Array.isArray(d.customFields))
     S.customFields = d.customFields.map(hydrateCustomField);
   if (Array.isArray(d.customFields2))
@@ -2914,10 +2995,6 @@ function applyLoadedData(d) {
   if (typeof d.nameFontSize === "number") S.nameFontSize = d.nameFontSize;
   if (typeof d.eryFontSize === "number") S.eryFontSize = d.eryFontSize;
   if (typeof d.eryTitleFontSize === "number") S.eryTitleFontSize = d.eryTitleFontSize;
-  if (typeof d.rankNameFontSize === "number")
-    S.rankNameFontSize = d.rankNameFontSize;
-  if (typeof d.rankRangeFontSize === "number")
-    S.rankRangeFontSize = d.rankRangeFontSize;
   if (typeof d.eryHintVisible === "boolean")
     S.eryHintVisible = d.eryHintVisible;
   if (typeof d.dualMode === "boolean") S.dualMode = d.dualMode;

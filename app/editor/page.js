@@ -404,7 +404,7 @@ function EditorPageInner() {
             </div>
           </div>
           <div className="font-setting-row">
-            <label>Число эритрогенов</label>
+            <label>Уровень эритрогенов</label>
             <div className="font-setting-control">
               <input
                 type="range"
@@ -415,36 +415,6 @@ function EditorPageInner() {
               />
               <span id="ery-font-val" className="font-val">
                 64px
-              </span>
-            </div>
-          </div>
-          <div className="font-setting-row">
-            <label>Название ранга</label>
-            <div className="font-setting-control">
-              <input
-                type="range"
-                id="rank-name-font-size"
-                min="18"
-                max="60"
-                defaultValue="32"
-              />
-              <span id="rank-name-font-val" className="font-val">
-                32px
-              </span>
-            </div>
-          </div>
-          <div className="font-setting-row">
-            <label>Диапазон ранга</label>
-            <div className="font-setting-control">
-              <input
-                type="range"
-                id="rank-range-font-size"
-                min="14"
-                max="48"
-                defaultValue="26"
-              />
-              <span id="rank-range-font-val" className="font-val">
-                26px
               </span>
             </div>
           </div>
@@ -1133,51 +1103,6 @@ function EditorPageInner() {
                   </div>
                 </div>
 
-                {/* Разделитель перед эритрогенами */}
-                <div
-                  className="section-divider"
-                  id="divider-ery"
-                  data-field-id="divider-ery"
-                >
-                  <svg
-                    width="100%"
-                    height="34"
-                    viewBox="0 0 800 34"
-                    preserveAspectRatio="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <line
-                      x1="0"
-                      y1="17"
-                      x2="355"
-                      y2="17"
-                      stroke="#7a4a1a"
-                      strokeWidth="1.2"
-                    />
-                    <line
-                      x1="445"
-                      y1="17"
-                      x2="800"
-                      y2="17"
-                      stroke="#7a4a1a"
-                      strokeWidth="1.2"
-                    />
-                    <path
-                      d="M355,17L372,7L400,17L372,27Z"
-                      fill="#9a6425"
-                      stroke="#7a4a1a"
-                      strokeWidth=".8"
-                    />
-                    <path
-                      d="M445,17L428,7L400,17L428,27Z"
-                      fill="#9a6425"
-                      stroke="#7a4a1a"
-                      strokeWidth=".8"
-                    />
-                    <circle cx="400" cy="17" r="4.5" fill="#7a4a1a" />
-                  </svg>
-                </div>
-
                 {/* Эритрогены */}
                 <div className="erythrogen-block" data-field-id="erythrogen">
                   <div
@@ -1194,26 +1119,33 @@ function EditorPageInner() {
                     </span>
                   </div>
                   <div className="erythrogen-row">
-                    <div className="rank-badge" id="rank-badge">
-                      <span className="rank-letter" id="rank-letter">
-                        —
+                    {/* Уровень целиком: буква + число + пояснение — одна строка
+                        с общей горизонтальной осью и общим масштабом */}
+                    <div className="ery-level">
+                      <div className="rank-badge" id="rank-badge">
+                        <span className="rank-letter" id="rank-letter">
+                          —
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        id="erythrogen-value"
+                        className="ery-number-input"
+                        placeholder="0"
+                        autoComplete="off"
+                      />
+                      <span
+                        className="rank-info-inline is-blank"
+                        id="rank-info-inline"
+                      >
+                        <span className="rank-dot">·</span>
+                        <span className="rank-name" id="rank-name">
+                          —
+                        </span>
+                        <span className="rank-dot">·</span>
+                        <span className="rank-range" id="rank-range" />
                       </span>
                     </div>
-                    <input
-                      type="text"
-                      id="erythrogen-value"
-                      className="ery-number-input"
-                      placeholder="0"
-                      autoComplete="off"
-                    />
-                    <span className="rank-info-inline" id="rank-info-inline">
-                      <span className="rank-dot"> · </span>
-                      <span className="rank-name" id="rank-name">
-                        Введите значение
-                      </span>
-                      <span className="rank-dot"> · </span>
-                      <span className="rank-range" id="rank-range" />
-                    </span>
                     <button
                       className="ery-hint-toggle ui-only"
                       id="ery-hint-toggle"
