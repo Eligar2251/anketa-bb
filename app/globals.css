@@ -9,8 +9,10 @@
   --input-font-size: 42px;
   --ery-font-size: 64px;
   --ery-title-font-size: 28px;
-  --rank-name-font-size: 32px;
-  --rank-range-font-size: 26px;
+  /* Пояснение уровня выводится из одного размера строки эритрогенов:
+     отдельных настроек у буквы, числа и названия ранга больше нет */
+  --rank-name-font-size: calc(var(--ery-font-size) * 0.5);
+  --rank-range-font-size: calc(var(--ery-font-size) * 0.4);
 }
 
 /* ============================================================
@@ -675,6 +677,9 @@ body {
 .extra-photo-row {
   align-items: flex-start;
   overflow: visible;
+  /* Ячейка центрируется по полю: слева её сдвигает иконка (52px) и
+     промежуток (22px), поэтому справа держим такой же отступ */
+  padding-right: 74px;
 }
 
 /* Крестик удаления поля держим у подписи, а не по центру высокой ячейки */
@@ -686,6 +691,8 @@ body {
 .extra-photo-content {
   overflow: visible;
   gap: 10px;
+  /* Подпись, ячейка и панель стоят по центру поля */
+  align-items: center;
   /* Сторона квадрата. Меняется ручкой в углу или кнопкой с размером */
   --ep-size: 360px;
 }
@@ -700,6 +707,26 @@ body {
   padding: 0 0 6px;
   font-family: inherit;
   cursor: text;
+  text-align: center;
+}
+
+/* Без подписи ячейка поднимается на место пустой строки заголовка.
+   Вернуть подпись можно кнопкой «Подпись» на панели под ячейкой. */
+.extra-photo-content.no-caption .extra-photo-caption {
+  display: none;
+}
+
+.extra-photo-content.no-caption .extra-photo-caption.is-editing {
+  display: block;
+}
+
+.ep-caption-btn {
+  display: none;
+}
+
+.extra-photo-content.no-caption .ep-caption-btn {
+  display: inline-flex;
+  align-items: center;
 }
 
 .extra-photo-caption:focus {
@@ -1082,6 +1109,9 @@ body {
 
 /* ============================================================
    ЭРИТРОГЕНЫ
+   Уровень — одна система: значок с буквой, число и пояснение стоят
+   на общей горизонтальной оси строки и масштабируются одним
+   размером --ery-font-size (отдельных настроек шрифтов нет).
    ============================================================ */
 .erythrogen-block {
   position: relative;
@@ -1089,12 +1119,17 @@ body {
   padding: 16px 48px 16px 0;
   border-top: 1px solid rgba(122, 74, 26, 0.2);
   margin-bottom: 16px;
+  /* Единая высота строки уровня — по ней центрируются буква и число */
+  --ery-line: calc(var(--ery-font-size) * 1.22);
+  /* Отступ строки = иконка заголовка + промежуток, чтобы значок уровня
+     начинался ровно под первой буквой заголовка */
+  --ery-indent: calc(var(--ery-title-font-size) * 2);
 }
 
 .erythrogen-header {
   display: flex;
   align-items: center;
-  gap: 0.45em;
+  gap: calc(var(--ery-title-font-size) * 0.45);
   margin-bottom: 12px;
   min-width: 0;
 }
@@ -1124,15 +1159,26 @@ body {
 .erythrogen-row {
   display: flex;
   align-items: center;
-  gap: 0.4em;
-  flex-wrap: wrap;
+  gap: 12px;
   min-width: 0;
+  padding-left: var(--ery-indent);
+  line-height: 1;
+}
+
+/* Буква + число + пояснение как один блок на одной оси */
+.ery-level {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: calc(var(--ery-font-size) * 0.22);
+  min-width: 0;
+  line-height: 1;
 }
 
 .rank-badge {
-  --badge-size: calc(var(--ery-font-size) * 1.22);
-  width: var(--badge-size);
-  height: var(--badge-size);
+  width: var(--ery-line);
+  height: var(--ery-line);
   border: 2px solid #8b0000;
   display: flex;
   align-items: center;
@@ -1140,9 +1186,11 @@ body {
   flex-shrink: 0;
   background: rgba(139, 0, 0, 0.07);
   box-sizing: border-box;
+  line-height: 1;
 }
 
 .rank-letter {
+  display: block;
   font-family: "Cormorant Garamond", serif;
   font-size: calc(var(--ery-font-size) * 0.78);
   font-weight: 700;
@@ -1158,6 +1206,8 @@ body {
   background: transparent;
   border: none;
   outline: none;
+  /* Высота как у значка — число и буква центрируются одинаково */
+  height: var(--ery-line);
   width: 4.6ch;
   min-width: 2.8ch;
   max-width: 8ch;
@@ -1175,21 +1225,33 @@ body {
 
 .rank-info-inline {
   display: flex;
-  align-items: baseline;
-  flex: 1 1 12em;
+  align-items: center; /* было baseline — из-за него текст уходил ниже буквы */
+  flex: 0 1 auto;
   min-width: 0;
-  gap: 0.2em;
-  line-height: 1.2;
+  gap: calc(var(--ery-font-size) * 0.14);
+  line-height: 1;
 }
 
 .rank-info-inline.hidden {
   display: none !important;
 }
 
+/* Пустое значение: только приглушённый прочерк, без точек и диапазона */
+.rank-info-inline.is-blank .rank-dot,
+.rank-info-inline.is-blank .rank-range {
+  display: none;
+}
+
+.rank-info-inline.is-blank .rank-name {
+  font-weight: 400;
+  font-style: italic;
+  opacity: 0.45;
+}
+
 .rank-dot {
   font-family: "Cormorant Garamond", serif;
   font-size: var(--rank-name-font-size);
-  line-height: 1.2;
+  line-height: 1;
   color: #8b5a1a;
   opacity: 0.45;
   flex-shrink: 0;
@@ -1199,7 +1261,7 @@ body {
 .rank-name {
   font-family: "Philosopher", serif;
   font-size: var(--rank-name-font-size);
-  line-height: 1.2;
+  line-height: 1;
   color: #3b1f0a;
   font-weight: 700;
   white-space: nowrap;
@@ -1211,7 +1273,7 @@ body {
 .rank-range {
   font-family: "Cormorant Garamond", serif;
   font-size: var(--rank-range-font-size);
-  line-height: 1.2;
+  line-height: 1;
   color: #8b5a1a;
   font-style: italic;
   white-space: nowrap;
@@ -2124,15 +2186,15 @@ body {
   display: none;
 }
 
-/* Эритрогены */
-.dual-mode .erythrogen-row {
-  flex-wrap: wrap;
-  gap: 8px;
+/* Эритрогены: в узкой колонке пояснение уровня уходит на свою строку,
+   но остаётся частью той же системы (общая ось и общий масштаб) */
+.dual-mode .ery-level {
+  gap: calc(var(--ery-font-size) * 0.16);
 }
 
 .dual-mode .rank-info-inline {
   flex: 1 1 100%;
-  min-width: 200px;
+  min-width: 0;
 }
 
 /* История */

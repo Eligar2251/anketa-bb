@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const fs = require('fs');
 
 const TEMP_KEY = 'charSheet_temp_v12';
 const photo = {
@@ -237,4 +238,101 @@ test('erythrogen title and rank scale in both columns', async ({ page }) => {
     const size = await badge.evaluate((el) => parseFloat(getComputedStyle(el).width));
     expect(size).toBeCloseTo(80 * 1.22, 1);
   }
+});
+
+test('photo cell is centered in the field and lifts up without a caption', async ({ page }) => {
+  await page.goto('/editor');
+  await addPhoto(page, 'Лицо');
+  const row = page.locator('#fields-list .extra-photo-row').last();
+  const area = row.locator('.extra-photo-area');
+  const rowBox = await row.boundingBox();
+  const areaBox = await area.boundingBox();
+  const centerX = (b) => b.x + b.width / 2;
+  // ячейка стоит по центру поля, а не прижата к левому краю
+  expect(Math.abs(centerX(areaBox) - centerX(rowBox))).toBeLessThan(2);
+  // подпись над ячейкой отцентрирована вместе с ней
+  const capBox = await row.locator('.extra-photo-caption').boundingBox();
+  expect(Math.abs(centerX(capBox) - centerX(rowBox))).toBeLessThan(2);
+
+  // с подписью строка заголовка занимает место над ячейкой
+  const contentBox = await row.locator('.extra-photo-content').boundingBox();
+  expect(areaBox.y).toBeGreaterThan(contentBox.y + 10);
+
+  // без подписи пустой строки нет: ячейка поднимается к верху поля
+  await row.locator('.extra-photo-caption').fill('');
+  await row.locator('.extra-photo-caption').blur();
+  const lifted = await area.boundingBox();
+  const liftedContent = await row.locator('.extra-photo-content').boundingBox();
+  expect(Math.abs(lifted.y - liftedContent.y)).toBeLessThan(1);
+  expect(Math.abs(lifted.y - areaBox.y)).toBeGreaterThan(5);
+
+  // подпись можно вернуть кнопкой на панели под ячейкой
+  await row.locator('.ep-caption-btn').click();
+  await expect(row.locator('.extra-photo-caption')).toBeVisible();
+  await row.locator('.extra-photo-caption').fill('Вернули');
+  await row.locator('.extra-photo-caption').blur();
+  const back = await area.boundingBox();
+  expect(Math.abs(back.y - areaBox.y)).toBeLessThan(2);
+});
+
+test('erythrogen level is a single centered system, no divider', async ({ page }) => {
+  await page.goto('/editor');
+  await expect(page.locator('#divider-ery')).toHaveCount(0);
+  await page.locator('#erythrogen-value').fill('3700');
+  const cy = (b) => b.y + b.height / 2;
+  const badge = await page.locator('#rank-badge').boundingBox();
+  const num = await page.locator('#erythrogen-value').boundingBox();
+  const name = await page.locator('#rank-name').boundingBox();
+  const range = await page.locator('#rank-range').boundingBox();
+  // буква, число и пояснение — на одной горизонтальной оси строки
+  expect(Math.abs(cy(badge) - cy(num))).toBeLessThan(1);
+  expect(Math.abs(cy(badge) - cy(name))).toBeLessThan(1);
+  expect(Math.abs(cy(badge) - cy(range))).toBeLessThan(1);
+
+  // значок уровня начинается под первой буквой заголовка, а не от края блока
+  const badgeBox = await page.locator('#rank-badge').boundingBox();
+  const titleBox = await page.locator('.erythrogen-title').first().boundingBox();
+  expect(Math.abs(badgeBox.x - titleBox.x)).toBeLessThan(1);
+
+  // название и диапазон ранга выводятся из одного размера уровня
+  await page.locator('#font-settings-btn').click();
+  await page.locator('#ery-font-size').fill('80');
+  await expect(page.locator('#rank-name')).toHaveCSS('font-size', '40px');
+  await expect(page.locator('#rank-range')).toHaveCSS('font-size', '32px');
+});
+
+test('exported PNG keeps all four corners of the portrait frame', async ({ page }) => {
+  await page.goto('/editor');
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.locator('#export-btn').click(),
+  ]);
+  const file = await download.path();
+  const b64 = fs.readFileSync(file).toString('base64');
+  const samples = await page.evaluate(async (b64) => {
+    const img = new Image();
+    img.src = 'data:image/png;base64,' + b64;
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth;
+    c.height = img.naturalHeight;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const at = (x, y) => Array.from(ctx.getImageData(x, y, 1, 1).data.slice(0, 3));
+    // портрет по умолчанию: x=58, y≈348, 860×3000; линии рамки в его углах
+    return {
+      tl: at(100, 351),
+      tr: at(880, 351),
+      bl: at(100, 3345),
+      br: at(880, 3345),
+      bg: at(500, 1800),
+    };
+  }, b64);
+  const dark = (px) => px[0] + px[1] + px[2] < 400;
+  const light = (px) => px[0] + px[1] + px[2] > 500;
+  expect(dark(samples.tl), `tl=${samples.tl}`).toBe(true);
+  expect(dark(samples.tr), `tr=${samples.tr}`).toBe(true);
+  expect(dark(samples.bl), `bl=${samples.bl}`).toBe(true);
+  expect(dark(samples.br), `br=${samples.br}`).toBe(true);
+  expect(light(samples.bg), `bg=${samples.bg}`).toBe(true);
 });
