@@ -278,27 +278,34 @@ test('photo cell is centered in the field and lifts up without a caption', async
 test('erythrogen level is a single centered system, no divider', async ({ page }) => {
   await page.goto('/editor');
   await expect(page.locator('#divider-ery')).toHaveCount(0);
-  await page.locator('#erythrogen-value').fill('3700');
+  await page.locator('#erythrogen-value').fill('3700 ед.');
   const cy = (b) => b.y + b.height / 2;
   const badge = await page.locator('#rank-badge').boundingBox();
   const num = await page.locator('#erythrogen-value').boundingBox();
   const name = await page.locator('#rank-name').boundingBox();
-  const range = await page.locator('#rank-range').boundingBox();
   // буква, число и пояснение — на одной горизонтальной оси строки
   expect(Math.abs(cy(badge) - cy(num))).toBeLessThan(1);
   expect(Math.abs(cy(badge) - cy(name))).toBeLessThan(1);
-  expect(Math.abs(cy(badge) - cy(range))).toBeLessThan(1);
 
-  // значок уровня начинается под первой буквой заголовка, а не от края блока
+  // диапазон не отображается
+  await expect(page.locator('#rank-range')).toHaveCount(0);
+
+  // значок уровня выравнивается по левому краю с иконкой заголовка
   const badgeBox = await page.locator('#rank-badge').boundingBox();
-  const titleBox = await page.locator('.erythrogen-title').first().boundingBox();
-  expect(Math.abs(badgeBox.x - titleBox.x)).toBeLessThan(1);
+  const iconBox = await page.locator('.erythrogen-header .field-icon-wrap').boundingBox();
+  expect(Math.abs(badgeBox.x - iconBox.x)).toBeLessThan(1);
 
-  // название и диапазон ранга выводятся из одного размера уровня
+  // название ранга масштабируется от размера уровня
   await page.locator('#font-settings-btn').click();
   await page.locator('#ery-font-size').fill('80');
   await expect(page.locator('#rank-name')).toHaveCSS('font-size', '40px');
-  await expect(page.locator('#rank-range')).toHaveCSS('font-size', '32px');
+
+  // название ранга можно скрыть и вернуть
+  await page.locator('#modal-close').click();
+  await page.locator('#ery-hint-toggle').click();
+  await expect(page.locator('#rank-info-inline')).toBeHidden();
+  await page.locator('#ery-hint-toggle').click();
+  await expect(page.locator('#rank-info-inline')).toBeVisible();
 });
 
 test('exported PNG keeps all four corners of the portrait frame', async ({ page }) => {

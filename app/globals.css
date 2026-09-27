@@ -1161,7 +1161,7 @@ body {
   align-items: center;
   gap: 12px;
   min-width: 0;
-  padding-left: var(--ery-indent);
+  padding-left: 0;
   line-height: 1;
 }
 
@@ -1208,9 +1208,9 @@ body {
   outline: none;
   /* Высота как у значка — число и буква центрируются одинаково */
   height: var(--ery-line);
-  width: 4.6ch;
+  width: auto;
   min-width: 2.8ch;
-  max-width: 8ch;
+  max-width: 14ch;
   text-align: left;
   padding: 0;
   margin: 0;
@@ -1271,14 +1271,7 @@ body {
 }
 
 .rank-range {
-  font-family: "Cormorant Garamond", serif;
-  font-size: var(--rank-range-font-size);
-  line-height: 1;
-  color: #8b5a1a;
-  font-style: italic;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  display: none !important;
 }
 
 .ery-hint-toggle {

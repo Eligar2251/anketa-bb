@@ -1409,7 +1409,7 @@ function initErythrogen() {
     if (isNaN(v) || inp.value.trim() === "") {
       ltr.textContent = "—";
       name.textContent = "";
-      range.textContent = "";
+      if (range) range.textContent = "";
       badge.className = "rank-badge";
       return;
     }
@@ -1419,7 +1419,7 @@ function initErythrogen() {
         .find((r) => v >= r.min) || RANKS[0];
     ltr.textContent = r.letter;
     name.textContent = r.name;
-    range.textContent = r.range + " ед.";
+    if (range) range.textContent = "";
     badge.className = `rank-badge ${r.cls}`;
   }
   inp.addEventListener("input", upd);
