@@ -301,11 +301,63 @@ test('erythrogen level is a single centered system, no divider', async ({ page }
   await expect(page.locator('#rank-name')).toHaveCSS('font-size', '40px');
 
   // название ранга можно скрыть и вернуть
-  await page.locator('#modal-close').click();
+  await page.locator('#font-modal-close').click();
   await page.locator('#ery-hint-toggle').click();
   await expect(page.locator('#rank-info-inline')).toBeHidden();
   await page.locator('#ery-hint-toggle').click();
   await expect(page.locator('#rank-info-inline')).toBeVisible();
+});
+
+test('erythrogen name follows fitted lining numerals in both columns', async ({ page }) => {
+  await page.goto('/editor');
+
+  async function checkRow(suffix = '') {
+    const input = page.locator('#erythrogen-value' + suffix);
+    await input.fill('3700 ед.');
+    await expect(input).toHaveCSS('font-family', '"Times New Roman", Times, serif');
+    await expect(input).toHaveCSS('font-variant-numeric', 'lining-nums tabular-nums');
+    await expect(page.locator('#rank-name' + suffix)).toHaveCSS('font-family', 'Philosopher, serif');
+    const row = await input.evaluate((el) => {
+      const num = el.getBoundingClientRect();
+      const name = el.parentElement.querySelector('.rank-name').getBoundingClientRect();
+      const info = el.parentElement.querySelector('.rank-info-inline').getBoundingClientRect();
+      const scale = num.height / el.offsetHeight;
+      const style = getComputedStyle(el);
+      const ctx = document.createElement('canvas').getContext('2d');
+      ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      return {
+        centerDelta: Math.abs(num.y + num.height / 2 - name.y - name.height / 2),
+        gap: (info.x - num.right) / scale,
+        expectedGap: parseFloat(getComputedStyle(el.parentElement).columnGap),
+        excessWidth: num.width / scale - ctx.measureText(el.value).width,
+        nameWidth: name.width,
+      };
+    });
+    expect(row.centerDelta).toBeLessThan(1);
+    expect(row.nameWidth).toBeGreaterThan(0);
+    expect(Math.abs(row.gap - row.expectedGap)).toBeLessThan(1);
+    expect(row.excessWidth).toBeGreaterThanOrEqual(0);
+    expect(row.excessWidth).toBeLessThan(5);
+    await input.fill('9');
+    const shortWidth = await input.evaluate(el => el.offsetWidth);
+    await input.fill('3700 ед.');
+    expect(await input.evaluate(el => el.offsetWidth)).toBeGreaterThan(shortWidth);
+    await input.blur();
+  }
+
+  await checkRow();
+  await page.locator('#dual-mode-btn').click();
+  await checkRow();
+  await checkRow('-right');
+  await page.locator('#font-settings-btn').click();
+  await page.locator('#ery-font-size').fill('80');
+  await page.locator('#font-modal-close').click();
+  await checkRow();
+  await checkRow('-right');
+  await page.reload();
+  await expect(page.locator('#erythrogen-value-right')).toHaveValue('3700 ед.');
+  await checkRow();
+  await checkRow('-right');
 });
 
 test('exported PNG keeps all four corners of the portrait frame', async ({ page }) => {
