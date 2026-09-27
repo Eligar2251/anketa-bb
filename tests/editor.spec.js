@@ -85,6 +85,56 @@ test('photo uploads, caption and crop survive reload, and clearing works', async
   await expect(row.locator('.extra-photo-wrapper')).not.toHaveClass(/active/);
 });
 
+test('photo cell is square, zooms and keeps its size after reload', async ({ page }) => {
+  await page.goto('/editor');
+  await addPhoto(page);
+  const row = page.locator('#fields-list .extra-photo-row').last();
+  const area = row.locator('.extra-photo-area');
+  // Пустая ячейка уже квадратная
+  const empty = await area.boundingBox();
+  expect(Math.abs(empty.width - empty.height)).toBeLessThan(1);
+  // Панель есть всегда, но масштаб доступен только с фото
+  await expect(row.locator('.extra-photo-toolbar')).toBeVisible();
+  await expect(row.locator('.extra-photo-size')).toBeVisible();
+  await expect(row.locator('.ep-zoom-in')).toBeHidden();
+  await uploadPhoto(page);
+  await expect(row.locator('.ep-zoom-in')).toBeVisible();
+  const start = await area.boundingBox();
+  expect(Math.abs(start.width - start.height)).toBeLessThan(1);
+
+  const zoom = row.locator('.extra-photo-zoom-value');
+  await expect(zoom).toHaveText('100%');
+  await row.locator('.ep-zoom-in').click();
+  await expect(zoom).toHaveText('112%');
+  await row.locator('.ep-zoom-out').click();
+  await expect(zoom).toHaveText('100%');
+  await row.locator('.ep-zoom-in').click();
+  await row.locator('.ep-zoom-fit').click();
+  await expect(zoom).toHaveText('100%');
+
+  // Тянем за угол — ячейка растёт, оставаясь квадратом
+  const handle = await row.locator('.extra-photo-resize').boundingBox();
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(
+    handle.x + handle.width / 2 + 60,
+    handle.y + handle.height / 2 + 60,
+    { steps: 6 },
+  );
+  await page.mouse.up();
+  const grown = await area.boundingBox();
+  expect(grown.width).toBeGreaterThan(start.width + 10);
+  expect(Math.abs(grown.width - grown.height)).toBeLessThan(1);
+  await expect(zoom).toHaveText('100%');
+  const saved = await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key)), TEMP_KEY);
+  expect(saved.customFields[0].photo.size).toBeGreaterThan(0);
+
+  await page.reload();
+  const restored = await row.locator('.extra-photo-area').boundingBox();
+  expect(Math.abs(restored.width - restored.height)).toBeLessThan(1);
+  expect(Math.abs(restored.width - grown.width)).toBeLessThan(3);
+});
+
 test('dual editor restores independent photo fields on both sides', async ({ page }) => {
   await page.goto('/editor');
   await page.locator('#dual-mode-btn').click();
